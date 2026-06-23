@@ -56,6 +56,10 @@ const ACCESSORIES_DB = [
 ];
 
 
+
+
+
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const qColor=v=>v>=80?FT.green:v>=60?"#8BC34A":v>=40?FT.orange:v>=20?"#FF6B35":FT.red;
 const qLabel=v=>v>=80?"Excellent":v>=60?"Good":v>=40?"Fair":v>=20?"Poor":"Unusable";
@@ -77,6 +81,10 @@ const interp=(def,dist,mode,type)=>{
 const makeId=()=>Math.random().toString(36).slice(2,9);
 const defFloor=()=>({id:makeId(),name:"Floor 1",img:null,imgW:0,imgH:0,pxPerFt:null,cameras:[],walls:[]});
 const defProject=()=>({name:"New Project",customer:"",buildings:[{id:makeId(),name:"Building A",floors:[defFloor()]}]});
+
+
+
+
 
 
 // ─── Raycasting ───────────────────────────────────────────────────────────────
@@ -124,6 +132,10 @@ function buildVisPolygon(ox,oy,maxR,dirRad,halfFov,walls){
 }
 
 
+
+
+
+
 // ─── Wall hit testing ─────────────────────────────────────────────────────────
 // Returns {wallId, part:"p1"|"p2"|"body"} or null
 function hitWall(pt, walls, tol){
@@ -143,11 +155,15 @@ function hitWall(pt, walls, tol){
 }
 
 
+
+
+
+
 // ─── Canvas Component ─────────────────────────────────────────────────────────
-function FloorCanvas({floor,cameras,selCamId,selWallId,
-                      onSelectCam,onSelectWall,onMoveCam,onMoveWall,
+function FloorCanvas({floor,cameras,annotations,zones,zoneDraft,selCamId,selWallId,selAnnotId,
+                      onSelectCam,onSelectWall,onMoveCam,onMoveWall,onAnnotationClick,onMoveAnnotation,
                       showFov,showSnap,mode,wallDraft,wallThick,mousePos,
-                      onScalePt1,onScalePt2,onWallClick,
+                      onScalePt1,onScalePt2,onWallClick,onZoneClick,onZoneDblClick,zoneType,
                       scalePt2,
                       onCanvasMouseMove,
                       zoom,panX,panY,onZoom,onPanDelta}){
@@ -165,16 +181,22 @@ function FloorCanvas({floor,cameras,selCamId,selWallId,
   const onScalePt1Ref=useRef(onScalePt1);
   const onScalePt2Ref=useRef(onScalePt2);
   const onWallClickRef=useRef(onWallClick);
+  const onZoneClickRef=useRef(onZoneClick);
+  const onZoneDblClickRef=useRef(onZoneDblClick);
   const onSelectCamRef=useRef(onSelectCam);
   const onSelectWallRef=useRef(onSelectWall);
   const onMoveCamRef=useRef(onMoveCam);
   const onMoveWallRef=useRef(onMoveWall);
   const onCanvasMouseMoveRef=useRef(onCanvasMouseMove);
+  const annotationsRef=useRef(annotations);
   React.useLayoutEffect(()=>{
     modeRef.current=mode;
+    annotationsRef.current=annotations;
     onScalePt1Ref.current=onScalePt1;
     onScalePt2Ref.current=onScalePt2;
     onWallClickRef.current=onWallClick;
+    onZoneClickRef.current=onZoneClick;
+    onZoneDblClickRef.current=onZoneDblClick;
     onSelectCamRef.current=onSelectCam;
     onSelectWallRef.current=onSelectWall;
     onMoveCamRef.current=onMoveCam;
@@ -272,12 +294,13 @@ function FloorCanvas({floor,cameras,selCamId,selWallId,
             ctx.closePath(); ctx.fill();
           }
         } else {
-          const halfFov=(def.fov*Math.PI)/180/2;
+          const camFov = cam.customFov != null ? cam.customFov : def.fov;
+        const halfFov=(camFov*Math.PI)/180/2;
           const visPts=buildVisPolygon(cam.x,cam.y,range,dirRad,halfFov,walls);
           // Ghost (full unobstructed cone)
           ctx.globalAlpha=0.09; ctx.fillStyle=def.color;
           ctx.beginPath(); ctx.moveTo(cam.x,cam.y);
-          ctx.arc(cam.x,cam.y,range,dirRad-halfFov,dirRad+halfFov);
+          ctx.arc(cam.x,cam.y,range,dirRad-halfFov,dirRad+halfFov); // ghost uses camFov via halfFov
           ctx.closePath(); ctx.fill();
           // Visible polygon
           if(visPts.length>1){
@@ -295,6 +318,62 @@ function FloorCanvas({floor,cameras,selCamId,selWallId,
         }
         ctx.restore();
       });
+    }
+
+    // ── Zones ────────────────────────────────────────────────────────────────
+    (zones||[]).forEach(z=>{
+      if(z.pts.length<2) return;
+      ctx.save();
+      const isCov=z.type==="coverage";
+      ctx.globalAlpha=0.25;
+      ctx.fillStyle=isCov?"#00A651":"#DA291C";
+      ctx.beginPath();
+      ctx.moveTo(z.pts[0].x,z.pts[0].y);
+      z.pts.forEach(p=>ctx.lineTo(p.x,p.y));
+      ctx.closePath(); ctx.fill();
+      ctx.globalAlpha=0.8;
+      ctx.strokeStyle=isCov?FT.green:FT.red;
+      ctx.lineWidth=2/zoom; ctx.setLineDash([6/zoom,3/zoom]);
+      ctx.stroke(); ctx.setLineDash([]);
+      // Label at centroid
+      const cx=z.pts.reduce((s,p)=>s+p.x,0)/z.pts.length;
+      const cy=z.pts.reduce((s,p)=>s+p.y,0)/z.pts.length;
+      ctx.fillStyle=isCov?FT.green:FT.red;
+      ctx.font=`bold ${11/zoom}px Inter,sans-serif`;
+      ctx.textAlign="center";
+      ctx.fillText(isCov?"✅ Coverage":"🚫 Exclusion",cx,cy);
+      ctx.textAlign="left";
+      ctx.restore();
+    });
+
+    // Zone being drawn (draft polygon)
+    if(zoneDraft&&zoneDraft.pts.length>0&&mousePos){
+      const isCov=zoneDraft.type==="coverage";
+      ctx.save();
+      ctx.strokeStyle=isCov?FT.green:FT.red;
+      ctx.lineWidth=2/zoom; ctx.setLineDash([5/zoom,3/zoom]);
+      ctx.fillStyle=isCov?"rgba(0,166,81,0.12)":"rgba(218,41,28,0.12)";
+      ctx.beginPath();
+      ctx.moveTo(zoneDraft.pts[0].x,zoneDraft.pts[0].y);
+      zoneDraft.pts.forEach(p=>ctx.lineTo(p.x,p.y));
+      ctx.lineTo(mousePos.x,mousePos.y);
+      if(zoneDraft.pts.length>=2) ctx.fill();
+      ctx.stroke();
+      ctx.setLineDash([]);
+      // Vertex dots
+      zoneDraft.pts.forEach((p,i)=>{
+        ctx.beginPath(); ctx.arc(p.x,p.y,4/zoom,0,Math.PI*2);
+        ctx.fillStyle=i===0?"#FFD700":isCov?FT.green:FT.red; ctx.fill();
+      });
+      // Close hint near first point
+      if(zoneDraft.pts.length>=3){
+        const d=Math.hypot(mousePos.x-zoneDraft.pts[0].x,mousePos.y-zoneDraft.pts[0].y);
+        if(d<20/zoom){
+          ctx.beginPath(); ctx.arc(zoneDraft.pts[0].x,zoneDraft.pts[0].y,10/zoom,0,Math.PI*2);
+          ctx.strokeStyle="#FFD700"; ctx.lineWidth=2/zoom; ctx.stroke();
+        }
+      }
+      ctx.restore();
     }
 
     // ── Walls ─────────────────────────────────────────────────────────────────
@@ -435,6 +514,37 @@ function FloorCanvas({floor,cameras,selCamId,selWallId,
       }
     }
 
+
+    // ── Annotations ──────────────────────────────────────────────────────────
+    (annotations||[]).forEach(a=>{
+      const isSel=selAnnotId===a.id;
+      ctx.save();
+      // Pin head
+      ctx.beginPath(); ctx.arc(a.x,a.y,8/zoom,0,Math.PI*2);
+      ctx.fillStyle=isSel?"#FFD700":FT.orange;
+      ctx.fill();
+      ctx.strokeStyle=FT.white; ctx.lineWidth=1.5/zoom; ctx.stroke();
+      // Pin icon
+      ctx.fillStyle=FT.white; ctx.font=`bold ${9/zoom}px sans-serif`;
+      ctx.textAlign="center"; ctx.textBaseline="middle";
+      ctx.fillText("📝",a.x,a.y); ctx.textAlign="left"; ctx.textBaseline="alphabetic";
+      // Label bubble
+      if(a.text){
+        const lines=a.text.split('\n').slice(0,3);
+        const fw=Math.max(...lines.map(l=>l.length))*5.5/zoom;
+        const fh=lines.length*13/zoom+6/zoom;
+        const bx=a.x+10/zoom, by=a.y-fh/2;
+        ctx.fillStyle="rgba(255,215,0,0.95)";
+        ctx.beginPath();
+        ctx.roundRect?ctx.roundRect(bx,by,fw+8/zoom,fh,4/zoom):ctx.rect(bx,by,fw+8/zoom,fh);
+        ctx.fill();
+        ctx.strokeStyle=isSel?FT.red:"#E6B800"; ctx.lineWidth=(isSel?2:1)/zoom; ctx.stroke();
+        ctx.fillStyle=FT.navy; ctx.font=`${10/zoom}px Inter,sans-serif`;
+        lines.forEach((l,i)=>ctx.fillText(l,bx+4/zoom,by+13/zoom+i*13/zoom));
+      }
+      ctx.restore();
+    });
+
     // Camera bodies
     cameras.forEach(cam=>{
       const def=CAMERA_DB.find(d=>d.model===cam.model); if(!def)return;
@@ -458,7 +568,8 @@ function FloorCanvas({floor,cameras,selCamId,selWallId,
       const lw=ctx.measureText(label).width;
       ctx.fillStyle="rgba(26,26,46,0.78)"; ctx.fillRect(lx-1/zoom,ly-9/zoom,lw+4/zoom,12/zoom);
       ctx.fillStyle=FT.white; ctx.fillText(label,lx,ly+1/zoom);
-      const sub=def.resolution+" "+def.fov+"°";
+      const camFovDisp = cam.customFov != null ? cam.customFov : def.fov;
+      const sub=def.resolution+" "+camFovDisp+"°";
       ctx.font=(8/zoom)+"px monospace";
       const sw=ctx.measureText(sub).width;
       ctx.fillStyle="rgba(26,26,46,0.65)"; ctx.fillRect(lx-1/zoom,ly+3/zoom,sw+4/zoom,10/zoom);
@@ -470,6 +581,8 @@ function FloorCanvas({floor,cameras,selCamId,selWallId,
     // Fixed UI overlays (not affected by zoom)
     // Mode bar
     const msgs={
+      zone:zoneDraft?`${zoneDraft.type==="coverage"?"✅":"🚫"} Click to add vertices — double-click to close zone (${(zoneDraft?.pts?.length||0)} pts)`:`${zoneType==="coverage"?"✅":"🚫"} Click to start zone polygon`,
+      annotate:"📝 Click anywhere to drop a note — click existing note to select it",
       wall:"🧱 Click to start wall (ESC to exit) | click again to finish",
       wall_edit:"✏️ Edit mode: drag endpoint or body to move wall — click empty to deselect",
       scale:"📐 Click POINT 1 of your known distance (ESC to cancel)",
@@ -479,7 +592,7 @@ function FloorCanvas({floor,cameras,selCamId,selWallId,
     const msg=msgs[mode];
     if(msg){
       ctx.fillStyle="rgba(26,26,46,0.9)"; ctx.fillRect(0,0,IW,26);
-      ctx.fillStyle=mode==="wall"||mode==="wall_edit"?FT.red:mode==="scale_confirm"?FT.green:FT.orange;
+      ctx.fillStyle=mode==="wall"||mode==="wall_edit"?FT.red:mode==="scale_confirm"?FT.green:mode==="annotate"?"#E6B800":mode==="zone"?(zoneType==="coverage"?FT.green:FT.red):FT.orange;
       ctx.font="bold 12px Inter,sans-serif"; ctx.textAlign="center";
       ctx.fillText(msg,IW/2,18); ctx.textAlign="left";
     }
@@ -488,7 +601,7 @@ function FloorCanvas({floor,cameras,selCamId,selWallId,
     ctx.fillStyle=FT.white; ctx.font="11px monospace"; ctx.textAlign="right";
     ctx.fillText(Math.round(zoom*100)+"%",IW-5,IH-8); ctx.textAlign="left";
 
-  },[cameras,selCamId,selWallId,hovCam,hovWall,showFov,floor,mode,scalePt2,wallDraft,wallThick,mousePos,zoom,panX,panY,IW,IH]);
+  },[cameras,selCamId,selWallId,hovCam,hovWall,showFov,floor,mode,scalePt2,wallDraft,wallThick,mousePos,zoom,panX,panY,IW,IH,annotations,selAnnotId,zones,zoneDraft]);
 
   useEffect(()=>{render();},[render]);
 
@@ -529,7 +642,27 @@ function FloorCanvas({floor,cameras,selCamId,selWallId,
       return;
     }
 
-    // Camera mode
+    // Zone drawing click
+    if(currentMode==="zone"){
+      onZoneClickRef.current(ip);
+      return;
+    }
+
+    // Annotation click
+    if(currentMode==="annotate"){
+      onAnnotationClick(ip);
+      return;
+    }
+
+    // Camera mode — check annotation hit first
+    const annotTol=12/zoomRef.current;
+    const ha=(annotations||[]).find(a=>Math.hypot(a.x-ip.x,a.y-ip.y)<annotTol);
+    if(ha&&currentMode==="camera"){
+      onAnnotationClick({hit:ha.id});
+      dragState.current={type:"annot",id:ha.id,ox:ip.x-ha.x,oy:ip.y-ha.y};
+      return;
+    }
+
     const camTol=18/zoomRef.current;
     const h=camerasRef.current.find(c=>Math.hypot(c.x-ip.x,c.y-ip.y)<camTol);
     if(h){
@@ -552,6 +685,13 @@ function FloorCanvas({floor,cameras,selCamId,selWallId,
       const scaleX=IW/r.width, scaleY=IH/r.height;
       onPanDelta(dx*scaleX, dy*scaleY);
       panState.current={startX:e.clientX,startY:e.clientY};
+      return;
+    }
+
+    // Drag annotation
+    if(dragState.current?.type==="annot"){
+      const ds=dragState.current;
+      onMoveAnnotation(ds.id, ip.x-ds.ox, ip.y-ds.oy);
       return;
     }
 
@@ -612,11 +752,16 @@ function FloorCanvas({floor,cameras,selCamId,selWallId,
           cursor:getCursor()
         }}
         onMouseDown={onDown} onMouseMove={onMove} onMouseUp={onUp} onMouseLeave={onUp}
+        onDoubleClick={e=>{if(modeRef.current==="zone"&&onZoneDblClickRef.current)onZoneDblClickRef.current();}}
         onWheel={onWheel} onContextMenu={e=>e.preventDefault()}
       />
     </div>
   );
 }
+
+
+
+
 
 
 
@@ -643,6 +788,19 @@ export default function App(){
   const [panX,setPanX]=useState(0);
   const [panY,setPanY]=useState(0);
   const [importing,setImporting]=useState(false);
+  const [darkMode,setDarkMode]=useState(false);
+  const [showOptimizer,setShowOptimizer]=useState(false);
+  const [selAnnotId,setSelAnnotId]=useState(null);
+  const [editAnnotId,setEditAnnotId]=useState(null); // annotation being text-edited
+  // Undo / Redo stacks — store full project snapshots
+  const [undoStack,setUndoStack]=useState([]);
+  const [redoStack,setRedoStack]=useState([]);
+  const [optTarget,setOptTarget]=useState(90);   // % coverage target
+  const [optRunning,setOptRunning]=useState(false);
+  const [optResult,setOptResult]=useState(null); // {count, coverage}
+  const [optModel,setOptModel]=useState(CAMERA_DB[0].model); // model for optimizer
+  const [zoneType,setZoneType]=useState("coverage"); // "coverage" | "exclusion"
+  const [zoneDraft,setZoneDraft]=useState(null);     // {type, pts:[{x,y}]} — in-progress polygon
   const [editingName,setEditingName]=useState(null);
   const [qMod,setQMod]=useState(CAMERA_DB[0].model);
   const [qDist,setQDist]=useState(10);
@@ -653,7 +811,28 @@ export default function App(){
   const projFileRef=useRef(null);
   const nid=useRef(1);
 
-  const updProject=fn=>setProject(p=>{const np=JSON.parse(JSON.stringify(p));fn(np);return np;});
+  // Undo/Redo — snapshot before every project mutation
+  const MAX_UNDO=40;
+  const updProject=fn=>setProject(p=>{
+    // Push current state to undo stack
+    setUndoStack(s=>[...s.slice(-(MAX_UNDO-1)),JSON.stringify(p)]);
+    setRedoStack([]);
+    const np=JSON.parse(JSON.stringify(p));fn(np);return np;
+  });
+  const undo=()=>{
+    if(!undoStack.length)return;
+    const prev=undoStack[undoStack.length-1];
+    setRedoStack(s=>[...s,JSON.stringify(project)]);  // wait — project may be stale
+    setUndoStack(s=>s.slice(0,-1));
+    setProject(JSON.parse(prev));
+  };
+  const redo=()=>{
+    if(!redoStack.length)return;
+    const next=redoStack[redoStack.length-1];
+    setUndoStack(s=>[...s,JSON.stringify(project)]);
+    setRedoStack(s=>s.slice(0,-1));
+    setProject(JSON.parse(next));
+  };
   const activeB=project.buildings.find(b=>b.id===activeBId)||project.buildings[0];
   const activeF=activeB?.floors.find(f=>f.id===activeFId)||activeB?.floors[0];
   const cameras=activeF?.cameras||[];
@@ -772,6 +951,180 @@ export default function App(){
   };
 
   // ── Scale handlers ────────────────────────────────────────────────────────
+  // ── Camera Count Optimizer ─────────────────────────────────────────────────
+  // Greedy algorithm — wall-enclosed area only, user-selected model.
+  const runOptimizer = () => {
+    if(!activeF?.imgW) { alert("Please upload a floor plan first."); return; }
+    if(!ppf) { alert("Please set the scale first (needed for accurate IR range)."); return; }
+    const walls=activeF.walls||[];
+    const covZones=(activeF.zones||[]).filter(z=>z.type==="coverage");
+    const excZones=(activeF.zones||[]).filter(z=>z.type==="exclusion");
+    if(covZones.length===0){ alert("Draw at least one ✅ Coverage Zone first — this tells the optimizer which area to fill."); return; }
+    setOptRunning(true); setOptResult(null);
+
+    // Capture IDs before setTimeout (avoids stale closure)
+    const snapBId=activeBId, snapFId=activeFId, snapModel=optModel;
+
+    setTimeout(()=>{
+      try{
+        const IW=activeF.imgW, IH=activeF.imgH;
+        const CELL=10; // grid cell size in px
+        const GW=Math.ceil(IW/CELL), GH=Math.ceil(IH/CELL);
+        const def=CAMERA_DB.find(d=>d.model===snapModel);
+        if(!def){ setOptRunning(false); return; }
+        const range=def.irRange*3.281*ppf;
+        const halfFov=def.fov>=360?Math.PI:(def.fov*Math.PI)/180/2;
+
+        // ── Zone-based room test ───────────────────────────────────────────
+        // A cell is valid if it is inside ANY coverage zone AND
+        // NOT inside any exclusion zone.
+        const ptInPoly=(px,py,pts)=>{
+          let inside=false; const n=pts.length;
+          for(let i=0,j=n-1;i<n;j=i++){
+            const xi=pts[i].x,yi=pts[i].y,xj=pts[j].x,yj=pts[j].y;
+            if(((yi>py)!==(yj>py))&&(px<(xj-xi)*(py-yi)/(yj-yi)+xi)) inside=!inside;
+          }
+          return inside;
+        };
+        const ptInRoom=(px,py)=>{
+          const inCov=covZones.some(z=>ptInPoly(px,py,z.pts));
+          if(!inCov) return false;
+          const inExc=excZones.some(z=>ptInPoly(px,py,z.pts));
+          return !inExc;
+        };
+
+        // Pre-compute which cells are inside the room
+        const inRoom=new Uint8Array(GW*GH);
+        let roomCellCount=0;
+        for(let gy=0;gy<GH;gy++){
+          for(let gx=0;gx<GW;gx++){
+            if(ptInRoom(gx*CELL+CELL/2, gy*CELL+CELL/2)){
+              inRoom[gy*GW+gx]=1;
+              roomCellCount++;
+            }
+          }
+        }
+
+        if(roomCellCount===0){
+          // Fallback: walls don't enclose a testable area — use full floor
+          inRoom.fill(1);
+          roomCellCount=GW*GH;
+        }
+
+        // Track coverage — only count cells inside the room
+        const covered=new Uint8Array(GW*GH);
+
+        // Mark cells covered by a camera (clipped to room)
+        const markCoverage=(cx,cy,dirRad,cov)=>{
+          const pts=buildVisPolygon(cx,cy,range,dirRad,halfFov,walls);
+          if(pts.length<2) return;
+          const xs=pts.map(p=>p.x), ys=pts.map(p=>p.y);
+          const minX=Math.max(0,Math.floor(Math.min(...xs)/CELL));
+          const maxX=Math.min(GW-1,Math.ceil(Math.max(...xs)/CELL));
+          const minY=Math.max(0,Math.floor(Math.min(...ys)/CELL));
+          const maxY=Math.min(GH-1,Math.ceil(Math.max(...ys)/CELL));
+          for(let gy=minY;gy<=maxY;gy++){
+            for(let gx=minX;gx<=maxX;gx++){
+              if(!inRoom[gy*GW+gx]) continue; // skip outside-room cells
+              const px=gx*CELL+CELL/2, py=gy*CELL+CELL/2;
+              let inside=false;
+              const n=pts.length;
+              for(let i=0,j=n-1;i<n;j=i++){
+                const xi=pts[i].x,yi=pts[i].y,xj=pts[j].x,yj=pts[j].y;
+                if(((yi>py)!==(yj>py))&&(px<(xj-xi)*(py-yi)/(yj-yi)+xi))
+                  inside=!inside;
+              }
+              if(inside) cov[gy*GW+gx]=1;
+            }
+          }
+        };
+
+        const scoreCam=(cx,cy,dirRad,cov)=>{
+          // Only score if camera position is inside room
+          if(!ptInRoom(cx,cy)) return -1;
+          const test=new Uint8Array(GW*GH);
+          markCoverage(cx,cy,dirRad,test);
+          let newCells=0;
+          for(let i=0;i<GW*GH;i++) if(test[i]&&!cov[i]) newCells++;
+          return newCells;
+        };
+
+        const placedCams=[];
+        let coveredCount=0;
+        const targetCount=Math.floor(roomCellCount*optTarget/100);
+        const MAX_CAMS=20;
+        const SAMPLE=Math.max(2,Math.floor(GW/12));
+        const DIRS=def.fov>=360?[0]:[0,45,90,135,180,225,270,315].map(d=>d*Math.PI/180);
+
+        while(coveredCount<targetCount && placedCams.length<MAX_CAMS){
+          let bestScore=-1, bestX=0, bestY=0, bestDir=0;
+          for(let gy=0;gy<GH;gy+=SAMPLE){
+            for(let gx=0;gx<GW;gx+=SAMPLE){
+              if(!inRoom[gy*GW+gx]) continue; // only sample inside room
+              const cx=gx*CELL+CELL/2, cy=gy*CELL+CELL/2;
+              for(const dir of DIRS){
+                const score=scoreCam(cx,cy,dir,covered);
+                if(score>bestScore){bestScore=score;bestX=cx;bestY=cy;bestDir=dir;}
+              }
+            }
+          }
+          if(bestScore<=0) break;
+          markCoverage(bestX,bestY,bestDir,covered);
+          coveredCount=covered.reduce((s,v)=>s+(inRoom[covered.indexOf?0:0]||1)*v,0);
+          // Count only in-room covered cells
+          coveredCount=0;
+          for(let i=0;i<GW*GH;i++) if(covered[i]&&inRoom[i]) coveredCount++;
+          placedCams.push({x:bestX,y:bestY,rotation:Math.round(bestDir*180/Math.PI)});
+        }
+
+        const coverage=Math.round(coveredCount/roomCellCount*100);
+        const newCams=placedCams.map(p=>({
+          id:"cam_"+makeId(), model:snapModel,
+          x:p.x, y:p.y, rotation:p.rotation,
+          label:"OPT-"+String(nid.current++).padStart(2,"0"),
+          notes:"Auto-placed by optimizer", location:""
+        }));
+        setProject(p=>{
+          const np=JSON.parse(JSON.stringify(p));
+          const b=np.buildings.find(b=>b.id===snapBId); if(!b)return np;
+          const f=b.floors.find(f=>f.id===snapFId); if(!f)return np;
+          f.cameras=[...f.cameras,...newCams];
+          return np;
+        });
+        setOptResult({count:placedCams.length, coverage});
+        setOptRunning(false);
+      } catch(e){ console.error(e); setOptRunning(false); }
+    },50);
+  };
+
+  // ── Zone helpers ─────────────────────────────────────────────────────────
+  const zones=(activeF?.zones)||[];
+  const updZones=fn=>updFloor(f=>{if(!f.zones)f.zones=[];fn(f.zones);});
+
+  const handleZoneClick=pt=>{
+    if(mode!=="zone") return;
+    if(!zoneDraft){ setZoneDraft({type:zoneType,pts:[pt]}); return; }
+    setZoneDraft(d=>({...d,pts:[...d.pts,pt]}));
+  };
+  const closeZone=()=>{
+    if(!zoneDraft||zoneDraft.pts.length<3) return;
+    updZones(zs=>zs.push({id:makeId(),type:zoneDraft.type,pts:zoneDraft.pts}));
+    setZoneDraft(null);
+  };
+  const delZone=id=>updZones(zs=>{const i=zs.findIndex(z=>z.id===id);if(i>=0)zs.splice(i,1);});
+  const clearZones=()=>updFloor(f=>{f.zones=[];});
+
+  // Point-in-polygon for zone containment
+  const ptInPolygon=(px,py,pts)=>{
+    let inside=false;
+    const n=pts.length;
+    for(let i=0,j=n-1;i<n;j=i++){
+      const xi=pts[i].x,yi=pts[i].y,xj=pts[j].x,yj=pts[j].y;
+      if(((yi>py)!==(yj>py))&&(px<(xj-xi)*(py-yi)/(yj-yi)+xi)) inside=!inside;
+    }
+    return inside;
+  };
+
   const applyScale=()=>{
     const ft=parseFloat(scaleFeet);if(!ft||ft<=0)return;
     const pxd=Math.hypot(scalePt2.x-scalePt1.x,scalePt2.y-scalePt1.y);
@@ -781,9 +1134,12 @@ export default function App(){
 
   useEffect(()=>{
     const h=e=>{
-      if(e.key==="Escape"){setWallDraft(null);setScalePt1(null);setScalePt2(null);setMode("camera");setSelWallId(null);}
-      if(e.key==="Delete"&&selWallId){updWalls(ws=>{const i=ws.findIndex(w=>w.id===selWallId);if(i>=0)ws.splice(i,1);});setSelWallId(null);}
-      if(e.key==="Delete"&&selCamId){updCams(cs=>{const i=cs.findIndex(c=>c.id===selCamId);if(i>=0)cs.splice(i,1);});setSelCamId(null);}
+      if(e.key==="Escape"){setWallDraft(null);setScalePt1(null);setScalePt2(null);setZoneDraft(null);setMode("camera");setSelWallId(null);setSelAnnotId(null);setEditAnnotId(null);}
+      if(e.key==="Delete"&&selWallId&&!editAnnotId){updWalls(ws=>{const i=ws.findIndex(w=>w.id===selWallId);if(i>=0)ws.splice(i,1);});setSelWallId(null);}
+      if(e.key==="Delete"&&selCamId&&!editAnnotId){updCams(cs=>{const i=cs.findIndex(c=>c.id===selCamId);if(i>=0)cs.splice(i,1);});setSelCamId(null);}
+      if(e.key==="Delete"&&selAnnotId&&!editAnnotId){updFloor(f=>{f.annotations=(f.annotations||[]).filter(a=>a.id!==selAnnotId);});setSelAnnotId(null);}
+      if((e.ctrlKey||e.metaKey)&&e.key==="z"&&!e.shiftKey){e.preventDefault();undo();}
+      if((e.ctrlKey||e.metaKey)&&(e.key==="y"||(e.key==="z"&&e.shiftKey))){e.preventDefault();redo();}
     };
     window.addEventListener("keydown",h);
     return()=>window.removeEventListener("keydown",h);
@@ -802,8 +1158,37 @@ export default function App(){
   const moveCam=(id,x,y)=>updCams(cs=>{const c=cs.find(c=>c.id===id);if(c){c.x=x;c.y=y;}});
   const updCam=(k,v)=>updCams(cs=>{const c=cs.find(c=>c.id===selCamId);if(c)c[k]=v;});
   const delCam=id=>{updCams(cs=>{const i=cs.findIndex(c=>c.id===id);if(i>=0)cs.splice(i,1);});setSelCamId(null);};
+  const dupCam=id=>{
+    const src=cameras.find(c=>c.id===id); if(!src)return;
+    const newId="cam_"+makeId();
+    const dup={...JSON.parse(JSON.stringify(src)),id:newId,x:src.x+30,y:src.y+30,
+               label:"CAM-"+String(nid.current++).padStart(2,"0")};
+    updCams(cs=>cs.push(dup));
+    setSelCamId(newId);
+  };
   const moveWall=(id,x1,y1,x2,y2)=>updWalls(ws=>{const w=ws.find(w=>w.id===id);if(w){w.x1=x1;w.y1=y1;w.x2=x2;w.y2=y2;}});
   const delWall=id=>{updWalls(ws=>{const i=ws.findIndex(w=>w.id===id);if(i>=0)ws.splice(i,1);});if(selWallId===id)setSelWallId(null);};
+
+  // Annotations stored on the floor: [{id, x, y, text}]
+  const annotations=(activeF?.annotations)||[];
+  const updAnnots=fn=>updFloor(f=>{if(!f.annotations)f.annotations=[];fn(f.annotations);});
+  const handleAnnotationClick=pt=>{
+    if(pt.hit){
+      // Clicked existing annotation
+      setSelAnnotId(pt.hit);
+      setEditAnnotId(pt.hit);
+      return;
+    }
+    // Drop new annotation
+    const id="ann_"+makeId();
+    updAnnots(as=>as.push({id,x:pt.x,y:pt.y,text:"Note"}));
+    setSelAnnotId(id);
+    setEditAnnotId(id);
+  };
+  const moveAnnotation=(id,x,y)=>updAnnots(as=>{const a=as.find(a=>a.id===id);if(a){a.x=x;a.y=y;}});
+  const updAnnotText=(id,text)=>updAnnots(as=>{const a=as.find(a=>a.id===id);if(a)a.text=text;});
+  const delAnnot=id=>{updAnnots(as=>{const i=as.findIndex(a=>a.id===id);if(i>=0)as.splice(i,1);});setSelAnnotId(null);setEditAnnotId(null);};
+  const selAnnot=annotations.find(a=>a.id===selAnnotId);
   const selCam=cameras.find(c=>c.id===selCamId);
   const selDef=selCam?CAMERA_DB.find(d=>d.model===selCam.model):null;
   const selWall=walls.find(w=>w.id===selWallId);
@@ -832,33 +1217,42 @@ export default function App(){
   const lprQ =qDef?interp(qDef,qDist,qCond,"lpr"):0;
 
   // ── Styles ────────────────────────────────────────────────────────────────
+  // Dark mode token overrides
+  const DM=darkMode?{
+    bg:"#0F0F1A", surface:"#1A1A2E", surface2:"#242438", border:"#333355",
+    text:"#E8E8F0", textSub:"#9999BB", muted:"#555577",
+  }:{
+    bg:FT.offWhite, surface:FT.white, surface2:FT.offWhite, border:FT.gray,
+    text:FT.text, textSub:FT.textSub, muted:FT.grayMid,
+  };
+
   const S={
-    app:{background:FT.offWhite,height:"100vh",display:"flex",flexDirection:"column",fontFamily:"'Inter','Segoe UI',Arial,sans-serif",color:FT.text,fontSize:13,overflow:"hidden"},
+    app:{background:DM.bg,height:"100vh",display:"flex",flexDirection:"column",fontFamily:"'Inter','Segoe UI',Arial,sans-serif",color:DM.text,fontSize:13,overflow:"hidden"},
     hdr:{background:FT.navy,padding:"0 12px",display:"flex",alignItems:"center",gap:10,flexShrink:0,height:50},
     lTxt:{fontSize:15,fontWeight:700,color:FT.white,letterSpacing:-0.3},
     lSub:{fontSize:9,color:"rgba(255,255,255,0.45)",letterSpacing:0.5},
     tabs:{display:"flex",marginLeft:"auto"},
     tab:a=>({padding:"0 14px",height:50,display:"flex",alignItems:"center",border:"none",cursor:"pointer",fontSize:12,fontWeight:600,background:a?FT.red:"transparent",color:a?FT.white:"rgba(255,255,255,0.65)",borderBottom:a?"3px solid #FF6B35":"3px solid transparent"}),
     body:{display:"flex",flex:1,overflow:"hidden"},
-    tree:{width:205,background:FT.white,borderRight:"1px solid "+FT.gray,display:"flex",flexDirection:"column",flexShrink:0},
+    tree:{width:205,background:DM.surface,borderRight:"1px solid "+DM.border,display:"flex",flexDirection:"column",flexShrink:0},
     tHdr:{padding:"9px 11px",borderBottom:"2px solid "+FT.red,fontSize:10,fontWeight:700,color:FT.navy,textTransform:"uppercase",letterSpacing:1,display:"flex",justifyContent:"space-between",alignItems:"center"},
     tScr:{flex:1,overflowY:"auto"},
-    tI:(a,d)=>({padding:`5px ${7+d*13}px`,cursor:"pointer",fontSize:11,background:a?"#FFF0EF":"transparent",color:a?FT.red:FT.textSub,borderLeft:a?"3px solid "+FT.red:"3px solid transparent",display:"flex",alignItems:"center",gap:4}),
-    tBot:{borderTop:"1px solid "+FT.gray,padding:"7px 11px",fontSize:10,color:FT.textSub},
+    tI:(a,d)=>({padding:`5px ${7+d*13}px`,cursor:"pointer",fontSize:11,background:a?darkMode?"#2A1A1E":"#FFF0EF":"transparent",color:a?FT.red:DM.textSub,borderLeft:a?"3px solid "+FT.red:"3px solid transparent",display:"flex",alignItems:"center",gap:4}),
+    tBot:{borderTop:"1px solid "+DM.border,padding:"7px 11px",fontSize:10,color:DM.textSub},
     main:{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"},
-    tbar:{background:FT.white,borderBottom:"1px solid "+FT.gray,padding:"5px 9px",display:"flex",alignItems:"center",gap:5,flexShrink:0,flexWrap:"wrap"},
+    tbar:{background:DM.surface,borderBottom:"1px solid "+DM.border,padding:"5px 9px",display:"flex",alignItems:"center",gap:5,flexShrink:0,flexWrap:"wrap"},
     cvRow:{flex:1,display:"flex",overflow:"hidden",position:"relative"},
-    sb:{width:232,background:FT.white,borderLeft:"1px solid "+FT.gray,overflowY:"auto",padding:9,flexShrink:0},
-    pan:{background:FT.white,border:"1px solid "+FT.gray,borderRadius:5,padding:9,marginBottom:7},
-    panR:{background:FT.white,borderTop:"3px solid "+FT.red,border:"1px solid "+FT.gray,borderRadius:5,padding:9,marginBottom:7},
+    sb:{width:232,background:DM.surface,borderLeft:"1px solid "+DM.border,overflowY:"auto",padding:9,flexShrink:0},
+    pan:{background:DM.surface,border:"1px solid "+DM.border,borderRadius:5,padding:9,marginBottom:7},
+    panR:{background:DM.surface,borderTop:"3px solid "+FT.red,border:"1px solid "+DM.border,borderRadius:5,padding:9,marginBottom:7},
     lbl:{fontSize:9,color:FT.grayMid,textTransform:"uppercase",letterSpacing:1,marginBottom:2},
-    sel:{width:"100%",background:FT.white,color:FT.text,border:"1px solid "+FT.gray,borderRadius:4,padding:"4px 6px",fontSize:11},
-    inp:{width:"100%",background:FT.white,color:FT.text,border:"1px solid "+FT.gray,borderRadius:4,padding:"4px 6px",fontSize:11,boxSizing:"border-box"},
+    sel:{width:"100%",background:DM.surface2,color:DM.text,border:"1px solid "+DM.border,borderRadius:4,padding:"4px 6px",fontSize:11},
+    inp:{width:"100%",background:DM.surface2,color:DM.text,border:"1px solid "+DM.border,borderRadius:4,padding:"4px 6px",fontSize:11,boxSizing:"border-box"},
     btn:v=>({padding:"4px 10px",borderRadius:4,border:"none",cursor:"pointer",fontWeight:600,fontSize:11,whiteSpace:"nowrap",
              background:v==="primary"?FT.red:v==="navy"?FT.navy:v==="success"?FT.green:v==="warn"?FT.orange:v==="ghost"?FT.white:v==="blue"?"#4488FF":FT.gray,
              color:v==="ghost"?FT.text:FT.white,border:v==="ghost"?"1px solid "+FT.gray:"none"}),
     mBtn:(a,c)=>({padding:"3px 9px",borderRadius:4,border:"1px solid "+(a?(c||FT.red):FT.gray),cursor:"pointer",fontWeight:600,fontSize:10,background:a?(c||FT.red):FT.white,color:a?FT.white:FT.grayDark}),
-    st:{fontSize:10,fontWeight:700,color:FT.navy,textTransform:"uppercase",letterSpacing:1,marginBottom:6,paddingBottom:3,borderBottom:"1px solid "+FT.gray},
+    st:{fontSize:10,fontWeight:700,color:darkMode?"#8888CC":FT.navy,textTransform:"uppercase",letterSpacing:1,marginBottom:6,paddingBottom:3,borderBottom:"1px solid "+DM.border},
     bdg:c=>({display:"inline-block",padding:"1px 5px",borderRadius:3,fontSize:9,fontWeight:700,background:c,color:FT.white,marginRight:2}),
     iB:c=>({background:"none",border:"none",cursor:"pointer",color:c||FT.grayMid,fontSize:12,padding:"1px 3px",lineHeight:1}),
     div:{width:1,height:18,background:FT.gray,margin:"0 2px",flexShrink:0},
@@ -887,6 +1281,9 @@ export default function App(){
         <input type="file" accept=".fcplan,.json" ref={projFileRef} style={{display:"none"}} onChange={loadProject}/>
         <button style={{...S.btn("ghost"),fontSize:10,padding:"3px 9px",marginLeft:6}} onClick={()=>projFileRef.current.click()}>📂 Load</button>
         <button style={{...S.btn("ghost"),fontSize:10,padding:"3px 9px"}} onClick={saveProject}>💾 Save</button>
+        <button style={{...S.btn("ghost"),fontSize:10,padding:"3px 9px",opacity:undoStack.length?1:0.35}} onClick={undo} title="Undo (Ctrl+Z)" disabled={!undoStack.length}>↩ Undo</button>
+        <button style={{...S.btn("ghost"),fontSize:10,padding:"3px 9px",opacity:redoStack.length?1:0.35}} onClick={redo} title="Redo (Ctrl+Y)" disabled={!redoStack.length}>↪ Redo</button>
+        <button style={{...S.btn("ghost"),fontSize:10,padding:"3px 9px"}} onClick={()=>setDarkMode(d=>!d)}>{darkMode?"☀️ Light":"🌙 Dark"}</button>
         <div style={S.tabs}>{TABS.map(([k,l])=><button key={k} style={S.tab(tab===k)} onClick={()=>setTab(k)}>{l}</button>)}</div>
       </div>
 
@@ -970,6 +1367,13 @@ export default function App(){
     <button style={S.mBtn(mode==="camera")} onClick={()=>{setMode("camera");setWallDraft(null);}}>🎥 Camera</button>
     <button style={S.mBtn(mode==="wall",FT.red)} onClick={()=>{setMode(mode==="wall"?"camera":"wall");setWallDraft(null);}}>🧱 Draw Wall</button>
     <button style={S.mBtn(mode==="wall_edit","#4488FF")} onClick={()=>{setMode(mode==="wall_edit"?"camera":"wall_edit");setWallDraft(null);}}>✏️ Edit Wall</button>
+    <button style={S.mBtn(mode==="annotate","#E6B800")} onClick={()=>{setMode(mode==="annotate"?"camera":"annotate");setSelAnnotId(null);setEditAnnotId(null);}}>📝 Notes</button>
+    <div style={S.div}/>
+    <button style={S.mBtn(mode==="zone"&&zoneType==="coverage",FT.green)}
+      onClick={()=>{setZoneType("coverage");setMode(mode==="zone"&&zoneType==="coverage"?"camera":"zone");setZoneDraft(null);}}>✅ Coverage</button>
+    <button style={S.mBtn(mode==="zone"&&zoneType==="exclusion",FT.red)}
+      onClick={()=>{setZoneType("exclusion");setMode(mode==="zone"&&zoneType==="exclusion"?"camera":"zone");setZoneDraft(null);}}>🚫 Exclude</button>
+    {(zones.length>0||zoneDraft)&&<button style={{...S.btn("ghost"),fontSize:9}} onClick={()=>{setZoneDraft(null);clearZones();}}>🗑 Zones</button>}
     {mode==="wall"&&<>
       <span style={{fontSize:10,color:FT.grayDark}}>Thick:</span>
       <input type="range" min={3} max={24} value={wallThick} onChange={e=>setWallThick(+e.target.value)} style={{width:55,accentColor:FT.red}}/>
@@ -991,6 +1395,7 @@ export default function App(){
       <optgroup label="Recorder">{CAMERA_DB.filter(d=>!d.cloudOnly).map(d=><option key={d.model} value={d.model}>{d.model}</option>)}</optgroup>
     </select>
     <button style={S.btn("navy")} onClick={addCamera}>＋ Add</button>
+    <button style={{...S.btn("success"),fontSize:10}} onClick={()=>setShowOptimizer(v=>!v)}>🎯 Optimize</button>
     <label style={{display:"flex",alignItems:"center",gap:3,cursor:"pointer",fontSize:10,color:FT.grayDark}}>
       <input type="checkbox" checked={showFov} onChange={e=>setShowFov(e.target.checked)}/> FOV
     </label>
@@ -1008,6 +1413,20 @@ export default function App(){
     </span>
   </div>
 
+  {/* Floor tabs */}
+  <div style={{background:DM.surface,borderBottom:"1px solid "+DM.border,display:"flex",alignItems:"center",gap:0,overflowX:"auto",flexShrink:0}}>
+    {activeB?.floors.map(f=>(
+      <button key={f.id} onClick={()=>{setActiveFId(f.id);setSelCamId(null);setSelWallId(null);setSelAnnotId(null);setMode("camera");setWallDraft(null);resetView();}}
+        style={{padding:"4px 14px",border:"none",borderRight:"1px solid "+DM.border,borderBottom:activeFId===f.id?"2px solid "+FT.red:"2px solid transparent",
+          background:activeFId===f.id?darkMode?"#1A0A0E":"#FFF0EF":"transparent",
+          color:activeFId===f.id?FT.red:DM.textSub,cursor:"pointer",fontSize:11,fontWeight:activeFId===f.id?700:400,
+          whiteSpace:"nowrap",flexShrink:0}}>
+        {f.img?"🗺 ":"📋 "}{f.name} <span style={{color:DM.muted,fontWeight:400}}>({f.cameras.length})</span>
+      </button>
+    ))}
+    <button onClick={()=>addFloor(activeBId)} style={{padding:"4px 10px",border:"none",borderRight:"1px solid "+DM.border,background:"transparent",color:FT.green,cursor:"pointer",fontSize:13,flexShrink:0}} title="Add floor">＋</button>
+  </div>
+
   <div style={S.cvRow}>
     {importing&&(
       <div style={{position:"absolute",inset:0,zIndex:99,background:"rgba(26,26,46,0.75)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:14,pointerEvents:"none"}}>
@@ -1016,6 +1435,63 @@ export default function App(){
           <circle cx="24" cy="24" r="20" stroke="#DA291C" strokeWidth="4" fill="none" strokeDasharray="90" strokeLinecap="round"/>
         </svg>
         <span style={{color:"#fff",fontWeight:700,fontSize:14}}>Importing floor plan…</span>
+      </div>
+    )}
+    {showOptimizer&&(
+      <div style={{position:"absolute",top:8,left:"50%",transform:"translateX(-50%)",zIndex:50,
+        background:FT.white,border:"2px solid "+FT.green,borderRadius:8,padding:14,
+        boxShadow:"0 4px 20px rgba(0,0,0,0.25)",minWidth:320,maxWidth:400}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+          <span style={{fontWeight:700,fontSize:13,color:FT.navy}}>🎯 Camera Count Optimizer</span>
+          <button style={S.iB(FT.grayMid)} onClick={()=>{setShowOptimizer(false);setOptResult(null);}}>✕</button>
+        </div>
+        <div style={{fontSize:11,color:FT.textSub,marginBottom:10}}>
+          Places cameras only inside <strong>Coverage Zones</strong>, avoiding
+          <strong>Exclusion Zones</strong>. Walls still block FOV.
+        </div>
+        {!ppf&&<div style={{fontSize:11,color:FT.orange,fontWeight:600,marginBottom:8}}>⚠ Set scale first for accurate IR range distances.</div>}
+        {(activeF?.zones||[]).filter(z=>z.type==="coverage").length===0&&(
+          <div style={{fontSize:11,color:FT.red,fontWeight:600,marginBottom:8}}>
+            ⚠ Draw a ✅ Coverage Zone first to define the area to optimize.
+          </div>
+        )}
+        {(activeF?.zones||[]).filter(z=>z.type==="exclusion").length>0&&(
+          <div style={{fontSize:11,color:FT.green,marginBottom:8}}>
+            ✓ {(activeF?.zones||[]).filter(z=>z.type==="exclusion").length} exclusion zone(s) detected — cameras will avoid those areas.
+          </div>
+        )}
+        <div style={S.lbl}>Camera Model</div>
+        <select style={{...S.sel,marginBottom:10}} value={optModel} onChange={e=>setOptModel(e.target.value)}>
+          <optgroup label="Cloud">{CAMERA_DB.filter(d=>d.cloudOnly).map(d=><option key={d.model} value={d.model}>{d.model} — {d.resolution} · {d.fov}° · IR {d.irRange}m</option>)}</optgroup>
+          <optgroup label="Recorder">{CAMERA_DB.filter(d=>!d.cloudOnly).map(d=><option key={d.model} value={d.model}>{d.model} — {d.resolution} · {d.fov}° · IR {d.irRange}m</option>)}</optgroup>
+        </select>
+        <div style={S.lbl}>Coverage target: {optTarget}%</div>
+        <input type="range" min={50} max={100} step={5} value={optTarget}
+          onChange={e=>setOptTarget(+e.target.value)}
+          style={{width:"100%",marginBottom:4,accentColor:FT.green}}/>
+        <div style={{display:"flex",justifyContent:"space-between",fontSize:9,color:FT.grayMid,marginBottom:10}}>
+          <span>50% (faster)</span><span>75%</span><span>100% (slower)</span>
+        </div>
+        {optResult&&(
+          <div style={{background:"#F0FFF4",border:"1px solid "+FT.green,borderRadius:5,padding:"8px 10px",marginBottom:10,fontSize:11}}>
+            <div style={{fontWeight:700,color:FT.green,fontSize:13}}>✓ Done — {optResult.count} camera{optResult.count!==1?"s":""} placed</div>
+            <div style={{color:FT.textSub}}>Estimated coverage: <strong>{optResult.coverage}%</strong> of floor area</div>
+            <div style={{fontSize:10,color:FT.grayMid,marginTop:3}}>Cameras labelled OPT-xx · drag to reposition · rotate as needed</div>
+          </div>
+        )}
+        <div style={{display:"flex",gap:8}}>
+          <button style={{...S.btn("success"),flex:1,padding:"8px"}}
+            onClick={runOptimizer} disabled={optRunning}>
+            {optRunning?"⏳ Optimizing…":"🎯 Run Optimizer"}
+          </button>
+          <button style={{...S.btn("ghost"),flex:1,padding:"8px"}}
+            onClick={()=>{setShowOptimizer(false);setOptResult(null);}}>Close</button>
+        </div>
+        <div style={{fontSize:9,color:FT.grayMid,marginTop:8}}>
+          Draw a <strong>✅ Coverage Zone</strong> around the area to fill, and
+          <strong>🚫 Exclusion Zones</strong> over toilets/closets/pantries.
+          Click to add vertices, <strong>double-click to close</strong> each zone. Max 20 cameras.
+        </div>
       </div>
     )}
     <FloorCanvas
@@ -1029,6 +1505,14 @@ export default function App(){
       onMoveWall={moveWall}
       showFov={showFov}
       showSnap={showSnap}
+      annotations={annotations}
+      zones={zones}
+      zoneDraft={zoneDraft}
+      selAnnotId={selAnnotId}
+      onAnnotationClick={handleAnnotationClick}
+      onMoveAnnotation={moveAnnotation}
+      onZoneClick={handleZoneClick}
+      onZoneDblClick={closeZone}
       mode={mode}
       wallDraft={wallDraft}
       wallThick={wallThick}
@@ -1042,6 +1526,7 @@ export default function App(){
         setWallDraft(null);
       }}
       onCanvasMouseMove={setMousePos}
+      zoneType={zoneType}
       zoom={zoom} panX={panX} panY={panY}
       onZoom={handleZoom}
       onPanDelta={handlePanDelta}
@@ -1068,9 +1553,19 @@ export default function App(){
         <div style={S.lbl}>Zone</div><input style={{...S.inp,marginBottom:5}} value={selCam.location} onChange={e=>updCam("location",e.target.value)} placeholder="Lobby, Entrance…"/>
         <div style={S.lbl}>Rotation: {selCam.rotation}°</div>
         <input type="range" min={0} max={359} value={selCam.rotation} onChange={e=>updCam("rotation",+e.target.value)} style={{width:"100%",marginBottom:5,accentColor:FT.red}}/>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:2}}>
+          <div style={S.lbl} style={{marginBottom:0}}>FOV: {selCam.customFov != null ? selCam.customFov : selDef.fov}° {selCam.customFov != null ? <span style={{color:FT.orange,fontSize:8}}>(custom)</span> : <span style={{color:FT.grayMid,fontSize:8}}>(default)</span>}</div>
+          {selCam.customFov != null && <button style={{...S.iB(FT.grayMid),fontSize:9}} onClick={()=>updCam("customFov",null)} title="Reset to default">↺</button>}
+        </div>
+        <input type="range" min={20} max={360} value={selCam.customFov != null ? selCam.customFov : selDef.fov}
+          onChange={e=>updCam("customFov",+e.target.value)}
+          style={{width:"100%",marginBottom:5,accentColor:FT.orange}}/>
         <div style={S.lbl}>Notes</div>
         <textarea style={{...S.inp,height:42,resize:"none",marginBottom:6}} value={selCam.notes} onChange={e=>updCam("notes",e.target.value)} placeholder="Mount height…"/>
-        <button style={{...S.btn("primary"),width:"100%"}} onClick={()=>delCam(selCam.id)}>🗑 Remove Camera</button>
+        <div style={{display:"flex",gap:6,marginTop:1}}>
+          <button style={{...S.btn("navy"),flex:1,fontSize:10}} onClick={()=>dupCam(selCam.id)}>⧉ Duplicate</button>
+          <button style={{...S.btn("primary"),flex:1,fontSize:10}} onClick={()=>delCam(selCam.id)}>🗑 Remove</button>
+        </div>
       </div>}
 
       {selWall&&<div style={S.pan}>
@@ -1087,15 +1582,32 @@ export default function App(){
         <button style={{...S.btn("ghost"),width:"100%",fontSize:10}} onClick={()=>setSelWallId(null)}>Deselect</button>
       </div>}
 
-      {!selCam&&!selWall&&<div style={S.pan}>
+      {selAnnot&&<div style={S.pan}>
+        <div style={S.st}>📝 Note</div>
+        <textarea
+          autoFocus
+          value={selAnnot.text}
+          onChange={e=>updAnnotText(selAnnot.id,e.target.value)}
+          style={{...S.inp,height:80,resize:"vertical",marginBottom:7,fontSize:11}}
+          placeholder="Type your note here…"
+        />
+        <div style={{fontSize:9,color:DM.muted,marginBottom:7}}>Drag note to reposition · DEL to delete</div>
+        <button style={{...S.btn("primary"),width:"100%",marginBottom:4,fontSize:10}} onClick={()=>delAnnot(selAnnot.id)}>🗑 Delete Note</button>
+        <button style={{...S.btn("ghost"),width:"100%",fontSize:10}} onClick={()=>{setSelAnnotId(null);setEditAnnotId(null);}}>Done</button>
+      </div>}
+
+      {!selCam&&!selWall&&!selAnnot&&<div style={S.pan}>
         <div style={S.st}>Tips</div>
         <div style={{fontSize:10,color:FT.textSub,lineHeight:1.9}}>
+          <strong>Camera:</strong> Add → drag → rotate → duplicate<br/>
+          <strong>FOV:</strong> adjust per-camera with orange slider<br/>
           <strong>Scale:</strong> Set Scale → 2 pts → enter ft<br/>
-          <strong>Camera:</strong> Add → drag to place → rotate<br/>
           <strong>Draw Wall:</strong> click start → click end<br/>
-          <strong>Edit Wall:</strong> click wall → drag<br/>
-          <strong>Snap:</strong> wall endpoints snap to nearby pts<br/>
-          <strong>Zoom:</strong> scroll · Right-drag to pan<br/>
+          <strong>Edit Wall:</strong> click wall → drag endpoints<br/>
+          <strong>Notes:</strong> 📝 mode → click to drop → edit<br/>
+          <strong>Undo/Redo:</strong> Ctrl+Z / Ctrl+Y<br/>
+          <strong>Zoom:</strong> scroll · right-drag to pan<br/>
+          <strong>Floors:</strong> tabs below toolbar<br/>
           <strong>Save/Load:</strong> header buttons (.fcplan)
         </div>
       </div>}
