@@ -80,7 +80,15 @@ const interp=(def,dist,mode,type)=>{
 };
 const makeId=()=>Math.random().toString(36).slice(2,9);
 const defFloor=()=>({id:makeId(),name:"Floor 1",img:null,imgW:0,imgH:0,pxPerFt:null,cameras:[],walls:[]});
-const defProject=()=>({name:"New Project",customer:"",buildings:[{id:makeId(),name:"Building A",floors:[defFloor()]}]});
+const defOutdoorZone=()=>({id:makeId(),name:"Outdoor Zone 1",type:"outdoor",
+  lat:null,lng:null,zoom:18,img:null,imgW:800,imgH:600,pxPerMeter:null,cameras:[],walls:[]});
+const defProject=()=>({name:"New Project",customer:"",buildings:[{id:makeId(),name:"Building A",floors:[defFloor()],outdoorZones:[]}]});
+const MAPBOX_TOKEN="pk.eyJ1IjoicmRld2l0dGU2NSIsImEiOiJjbXFzZGNxZ2wwMmRkMnBwbDk0Mndmb2p5In0.R_j9OJnOgFPgNkGYHd89WQ";
+const getMapboxUrl=(lat,lng,zoom,w=800,h=600)=>
+  'https://api.mapbox.com/styles/v1/mapbox/satellite-streets-v12/static/'+
+  lng+','+lat+','+zoom+',0/'+w+'x'+h+'?attribution=false&logo=false&access_token='+MAPBOX_TOKEN;
+// px per meter at given lat/zoom (Mapbox formula)
+const mapboxPxPerMeter=(lat,zoom)=>Math.cos(lat*Math.PI/180)*2*Math.PI*6378137/(256*Math.pow(2,zoom))*2;
 
 
 
@@ -239,7 +247,9 @@ function FloorCanvas({floor,cameras,annotations,zones,zoneDraft,selCamId,selWall
   useEffect(()=>{
     if(!floor.img){imgEl.current=null;return;}
     const im=new Image();
+    im.crossOrigin="anonymous"; // needed for Mapbox URLs and canvas taint
     im.onload=()=>{imgEl.current=im;};
+    im.onerror=()=>console.error("Image load failed:",floor.img?.slice(0,80));
     im.src=floor.img;
   },[floor.img]);
 
@@ -825,6 +835,14 @@ export default function App(){
   const [importing,setImporting]=useState(false);
   const [darkMode,setDarkMode]=useState(false);
   const [showOptimizer,setShowOptimizer]=useState(false);
+  const [showMapSearch,setShowMapSearch]=useState(false);  // outdoor zone search dialog
+  const [mapSearchQuery,setMapSearchQuery]=useState("");
+  const [mapSearchLat,setMapSearchLat]=useState("");
+  const [mapSearchLng,setMapSearchLng]=useState("");
+  const [mapZoomLevel,setMapZoomLevel]=useState(18);
+  const [mapSearching,setMapSearching]=useState(false);
+  const [activeTabType,setActiveTabType]=useState("floor"); // "floor" | "outdoor"
+  const [activeOZId,setActiveOZId]=useState(null);
   const [selAnnotId,setSelAnnotId]=useState(null);
   const [editAnnotId,setEditAnnotId]=useState(null); // annotation being text-edited
   // Undo / Redo stacks — store full project snapshots
@@ -870,12 +888,23 @@ export default function App(){
     setProject(JSON.parse(next));
   };
   const activeB=project.buildings.find(b=>b.id===activeBId)||project.buildings[0];
-  const activeF=activeB?.floors.find(f=>f.id===activeFId)||activeB?.floors[0];
-  const cameras=activeF?.cameras||[];
-  const walls=activeF?.walls||[];
-  const ppf=activeF?.pxPerFt||null;
+  const activeF=activeTabType==="floor"?(activeB?.floors.find(f=>f.id===activeFId)||activeB?.floors[0]):null;
+  const activeOZ=activeTabType==="outdoor"?((activeB?.outdoorZones||[]).find(z=>z.id===activeOZId)||null):null;
+  // Unified "active canvas item" — whichever is active
+  const activeCanvas=activeF||activeOZ;
+  const cameras=(activeCanvas?.cameras)||[];
+  const walls=(activeCanvas?.walls)||[];
+  const ppf=activeCanvas?.pxPerFt||activeCanvas?.pxPerMeter||null;
 
-  const updFloor=fn=>updProject(np=>{const b=np.buildings.find(b=>b.id===activeBId);if(!b)return;const f=b.floors.find(f=>f.id===activeFId);if(f)fn(f);});
+  const updFloor=fn=>updProject(np=>{
+    const b=np.buildings.find(b=>b.id===activeBId);if(!b)return;
+    if(activeTabType==="outdoor"){
+      if(!b.outdoorZones)b.outdoorZones=[];
+      const z=b.outdoorZones.find(z=>z.id===activeOZId);if(z)fn(z);
+    } else {
+      const f=b.floors.find(f=>f.id===activeFId);if(f)fn(f);
+    }
+  });
   const updCams=fn=>updFloor(f=>fn(f.cameras));
   const updWalls=fn=>updFloor(f=>{if(!f.walls)f.walls=[];fn(f.walls);});
 
@@ -1513,6 +1542,48 @@ export default function App(){
 
   // ── Tree ops ──────────────────────────────────────────────────────────────
   const addBuilding=()=>{const f=defFloor();const bid=makeId();const b={id:bid,name:"Building "+String.fromCharCode(65+project.buildings.length),floors:[f]};updProject(np=>np.buildings.push(b));setActiveBId(bid);setActiveFId(f.id);setSelCamId(null);resetView();};
+  const addOutdoorZone=(bid,lat,lng,zoom)=>{
+    setMapSearching(true);
+    const oz=defOutdoorZone();
+    oz.lat=lat; oz.lng=lng; oz.zoom=zoom;
+    // Store the URL directly — canvas drawImage loads it cross-origin
+    // Use non-@2x (800x600) to keep canvas coords 1:1 with logical pixels
+    const url=getMapboxUrl(lat,lng,zoom,800,600).replace('@2x','');
+    oz.img=url;
+    oz.imgW=800;
+    oz.imgH=600;
+    // px per meter at this zoom (logical pixels, non-retina)
+    oz.pxPerMeter=mapboxPxPerMeter(lat,zoom);
+    // pxPerFt for compatibility with scale display
+    oz.pxPerFt=oz.pxPerMeter*0.3048;
+    updProject(np=>{
+      const b=np.buildings.find(b=>b.id===bid);
+      if(!b.outdoorZones)b.outdoorZones=[];
+      const n=b.outdoorZones.length+1;
+      oz.name="Outdoor Zone "+n;
+      b.outdoorZones.push(oz);
+    });
+    setActiveBId(bid);
+    setActiveOZId(oz.id);
+    setActiveTabType("outdoor");
+    setShowMapSearch(false);
+    setMapSearching(false);
+    setSelCamId(null);
+    setTimeout(resetView,100);
+  };
+
+  const geocodeAddress=async(query)=>{
+    const url='https://api.mapbox.com/geocoding/v5/mapbox.places/'+
+      encodeURIComponent(query)+'.json?access_token='+MAPBOX_TOKEN+'&limit=1';
+    const r=await fetch(url);
+    const d=await r.json();
+    if(d.features&&d.features.length>0){
+      const [lng,lat]=d.features[0].center;
+      return{lat,lng};
+    }
+    return null;
+  };
+
   const addFloor=bid=>{const f=defFloor();f.name="Floor "+((project.buildings.find(b=>b.id===bid)||{floors:[]}).floors.length+1);updProject(np=>{const b=np.buildings.find(b=>b.id===bid);if(b)b.floors.push(f);});setActiveBId(bid);setActiveFId(f.id);setSelCamId(null);resetView();};
   const delBuilding=bid=>{if(project.buildings.length<=1)return;updProject(np=>{np.buildings=np.buildings.filter(b=>b.id!==bid);});const b=project.buildings.find(b=>b.id!==bid);if(b){setActiveBId(b.id);setActiveFId(b.floors[0].id);}};
   const delFloor=(bid,fid)=>{const b=project.buildings.find(b=>b.id===bid);if(!b||b.floors.length<=1)return;updProject(np=>{const bn=np.buildings.find(b=>b.id===bid);if(bn)bn.floors=bn.floors.filter(f=>f.id!==fid);});const r=b.floors.find(f=>f.id!==fid);if(r)setActiveFId(r.id);};
@@ -1615,8 +1686,8 @@ export default function App(){
                   {project.buildings.length>1&&<button style={S.iB(FT.red)} onClick={e=>{e.stopPropagation();delBuilding(b.id);}}>✕</button>}
                 </div>
                 {b.floors.map(f=>(
-                  <div key={f.id} style={S.tI(activeFId===f.id,1)}
-                    onClick={()=>{setActiveBId(b.id);setActiveFId(f.id);setSelCamId(null);setSelWallId(null);setMode("camera");setWallDraft(null);resetView();}}>
+                  <div key={f.id} style={S.tI(activeTabType==="floor"&&activeFId===f.id,1)}
+                    onClick={()=>{setActiveBId(b.id);setActiveFId(f.id);setActiveTabType("floor");setSelCamId(null);setSelWallId(null);setMode("camera");setWallDraft(null);resetView();}}>
                     {editingName?.id===f.id
                       ?<input autoFocus value={editingName.val} style={{...S.inp,padding:"1px 4px",fontSize:10,flex:1}}
                           onChange={e=>setEditingName(n=>({...n,val:e.target.value}))}
@@ -1634,7 +1705,8 @@ export default function App(){
             ))}
           </div>
           <div style={S.tBot}>
-            {[["Cameras",allCams.length,FT.red],["Buildings",project.buildings.length,FT.navy],["PoE",totalPoe+"W",FT.orange]].map(([l,v,c])=>(
+            {[["Cameras",allCams.length,FT.red],["Buildings",project.buildings.length,FT.navy],["PoE",totalPoe+"W",FT.orange],
+              ["Outdoor",project.buildings.reduce((s,b)=>s+(b.outdoorZones||[]).length,0),"#00A651"]].map(([l,v,c])=>(
               <div key={l} style={{display:"flex",justifyContent:"space-between",marginBottom:2}}><span>{l}</span><strong style={{color:c}}>{v}</strong></div>
             ))}
           </div>
@@ -1742,18 +1814,30 @@ export default function App(){
       {mode==="zone"&&<><span style={{color:zoneType==="coverage"?FT.green:FT.red,fontWeight:700,whiteSpace:"nowrap"}}>{zoneType==="coverage"?"✅ COVERAGE":"🚫 EXCLUSION"}</span><span style={{color:DM.muted,marginLeft:4,whiteSpace:"nowrap"}}>{zoneDraft?`${zoneDraft.pts.length} pts — double-click to close`:"click to start"}</span>{zoneDraft&&zoneDraft.pts.length>=3&&<button style={{...S.btn("success"),fontSize:9,marginLeft:4}} onClick={closeZone}>✓ Close</button>}{zoneDraft&&<button style={{...S.btn("ghost"),fontSize:9}} onClick={()=>setZoneDraft(null)}>✕</button>}{zones.length>0&&<button style={{...S.btn("ghost"),fontSize:9}} onClick={()=>{setZoneDraft(null);clearZones();}}>🗑 Zones</button>}<button style={{...S.btn("ghost"),fontSize:9,marginLeft:"auto"}} onClick={()=>{setMode("camera");setZoneDraft(null);}}>✕ Exit</button></>}
     </div>
   </div>
-  {/* Floor tabs */}
+  {/* Floor + Outdoor Zone tabs */}
   <div style={{background:DM.surface,borderBottom:"1px solid "+DM.border,display:"flex",alignItems:"center",gap:0,overflowX:"auto",flexShrink:0}}>
-    {activeB?.floors.map(f=>(
-      <button key={f.id} onClick={()=>{setActiveFId(f.id);setSelCamId(null);setSelWallId(null);setSelAnnotId(null);setMode("camera");setWallDraft(null);resetView();}}
-        style={{padding:"4px 14px",border:"none",borderRight:"1px solid "+DM.border,borderBottom:activeFId===f.id?"2px solid "+FT.red:"2px solid transparent",
-          background:activeFId===f.id?darkMode?"#1A0A0E":"#FFF0EF":"transparent",
-          color:activeFId===f.id?FT.red:DM.textSub,cursor:"pointer",fontSize:11,fontWeight:activeFId===f.id?700:400,
+    {activeB?.floors.map(f=>{
+      const isAct=activeTabType==="floor"&&activeFId===f.id;
+      return<button key={f.id} onClick={()=>{setActiveFId(f.id);setActiveTabType("floor");setSelCamId(null);setSelWallId(null);setSelAnnotId(null);setMode("camera");setWallDraft(null);resetView();}}
+        style={{padding:"4px 14px",border:"none",borderRight:"1px solid "+DM.border,borderBottom:isAct?"2px solid "+FT.red:"2px solid transparent",
+          background:isAct?darkMode?"#1A0A0E":"#FFF0EF":"transparent",
+          color:isAct?FT.red:DM.textSub,cursor:"pointer",fontSize:11,fontWeight:isAct?700:400,
           whiteSpace:"nowrap",flexShrink:0}}>
         {f.img?"🗺 ":"📋 "}{f.name} <span style={{color:DM.muted,fontWeight:400}}>({f.cameras.length})</span>
-      </button>
-    ))}
+      </button>;
+    })}
+    {(activeB?.outdoorZones||[]).map(oz=>{
+      const isAct=activeTabType==="outdoor"&&activeOZId===oz.id;
+      return<button key={oz.id} onClick={()=>{setActiveOZId(oz.id);setActiveTabType("outdoor");setSelCamId(null);setSelWallId(null);setSelAnnotId(null);setMode("camera");setWallDraft(null);resetView();}}
+        style={{padding:"4px 14px",border:"none",borderRight:"1px solid "+DM.border,borderBottom:isAct?"2px solid "+FT.green:"2px solid transparent",
+          background:isAct?darkMode?"#0A1A0E":"#F0FFF4":"transparent",
+          color:isAct?FT.green:DM.textSub,cursor:"pointer",fontSize:11,fontWeight:isAct?700:400,
+          whiteSpace:"nowrap",flexShrink:0}}>
+        🛰 {oz.name} <span style={{color:DM.muted,fontWeight:400}}>({oz.cameras.length})</span>
+      </button>;
+    })}
     <button onClick={()=>addFloor(activeBId)} style={{padding:"4px 10px",border:"none",borderRight:"1px solid "+DM.border,background:"transparent",color:FT.green,cursor:"pointer",fontSize:13,flexShrink:0}} title="Add floor">＋</button>
+    <button onClick={()=>setShowMapSearch(true)} style={{padding:"4px 10px",border:"none",borderRight:"1px solid "+DM.border,background:"transparent",color:"#00A651",cursor:"pointer",fontSize:11,flexShrink:0,fontWeight:600}} title="Add outdoor zone">🛰 ＋</button>
   </div>
 
   <div ref={canvasWrapRef} style={S.cvRow}>
@@ -1766,6 +1850,61 @@ export default function App(){
         <span style={{color:"#fff",fontWeight:700,fontSize:14}}>Importing floor plan…</span>
       </div>
     )}
+    {/* ── Map Search Dialog ────────────────────────────────────────────── */}
+    {showMapSearch&&(
+      <div style={{position:"absolute",inset:0,zIndex:200,background:"rgba(0,0,0,0.6)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+        <div style={{background:DM.surface,borderRadius:10,padding:20,width:420,boxShadow:"0 8px 32px rgba(0,0,0,0.4)",border:"2px solid "+FT.green}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+            <span style={{fontWeight:700,fontSize:14,color:FT.green}}>🛰 Add Outdoor Zone</span>
+            <button style={S.iB(DM.textSub)} onClick={()=>setShowMapSearch(false)}>✕</button>
+          </div>
+          <div style={{fontSize:11,color:DM.textSub,marginBottom:12}}>
+            Search by address or enter GPS coordinates. The satellite map will be used as the floor plan.
+          </div>
+          <div style={S.lbl}>Address or place name</div>
+          <div style={{display:"flex",gap:6,marginBottom:10}}>
+            <input style={{...S.inp,flex:1}} value={mapSearchQuery} onChange={e=>setMapSearchQuery(e.target.value)}
+              placeholder="e.g. Eiffel Tower, Paris" onKeyDown={e=>e.key==="Enter"&&geocodeAddress(mapSearchQuery).then(r=>{if(r){setMapSearchLat(r.lat.toFixed(6));setMapSearchLng(r.lng.toFixed(6));}})}/>
+            <button style={S.btn("success")} onClick={()=>geocodeAddress(mapSearchQuery).then(r=>{if(r){setMapSearchLat(r.lat.toFixed(6));setMapSearchLng(r.lng.toFixed(6));}else alert("Address not found.");})}>Search</button>
+          </div>
+          <div style={{display:"flex",gap:8,marginBottom:10}}>
+            <div style={{flex:1}}>
+              <div style={S.lbl}>Latitude</div>
+              <input style={S.inp} value={mapSearchLat} onChange={e=>setMapSearchLat(e.target.value)} placeholder="36.1699"/>
+            </div>
+            <div style={{flex:1}}>
+              <div style={S.lbl}>Longitude</div>
+              <input style={S.inp} value={mapSearchLng} onChange={e=>setMapSearchLng(e.target.value)} placeholder="-115.1398"/>
+            </div>
+          </div>
+          <div style={S.lbl}>Zoom level: {mapZoomLevel} — {mapZoomLevel<=15?"neighborhood":mapZoomLevel<=17?"block":"building"}</div>
+          <input type="range" min={13} max={20} value={mapZoomLevel} onChange={e=>setMapZoomLevel(+e.target.value)}
+            style={{width:"100%",marginBottom:4,accentColor:FT.green}}/>
+          <div style={{display:"flex",justifyContent:"space-between",fontSize:9,color:DM.muted,marginBottom:12}}>
+            <span>13 — neighborhood</span><span>16 — block</span><span>20 — building</span>
+          </div>
+          {mapSearchLat&&mapSearchLng&&(
+            <div style={{marginBottom:12,borderRadius:6,overflow:"hidden",border:"1px solid "+DM.border}}>
+              <img src={getMapboxUrl(parseFloat(mapSearchLat),parseFloat(mapSearchLng),mapZoomLevel,400,200)}
+                style={{width:"100%",height:160,objectFit:"cover",display:"block"}}
+                alt="Map preview"/>
+              <div style={{padding:"4px 8px",fontSize:9,color:DM.textSub,background:DM.surface2}}>
+                Preview · {parseFloat(mapSearchLat).toFixed(4)}, {parseFloat(mapSearchLng).toFixed(4)} · zoom {mapZoomLevel}
+              </div>
+            </div>
+          )}
+          <div style={{display:"flex",gap:8}}>
+            <button style={{...S.btn("success"),flex:1,padding:"8px",fontSize:12}}
+              disabled={!mapSearchLat||!mapSearchLng||mapSearching}
+              onClick={()=>addOutdoorZone(activeBId,parseFloat(mapSearchLat),parseFloat(mapSearchLng),mapZoomLevel)}>
+              {mapSearching?"⏳ Loading map…":"🛰 Create Outdoor Zone"}
+            </button>
+            <button style={{...S.btn("ghost"),flex:1,padding:"8px"}} onClick={()=>setShowMapSearch(false)}>Cancel</button>
+          </div>
+        </div>
+      </div>
+    )}
+
     {showOptimizer&&(
       <div style={{position:"absolute",top:8,left:"50%",transform:"translateX(-50%)",zIndex:50,
         background:FT.white,border:"2px solid "+FT.green,borderRadius:8,padding:14,
@@ -1824,7 +1963,7 @@ export default function App(){
       </div>
     )}
     <FloorCanvas
-      floor={{...activeF,_scalePt1:scalePt1}}
+      floor={{...activeCanvas,_scalePt1:scalePt1}}
       cameras={cameras}
       selCamId={selCamId}
       selWallId={selWallId}
