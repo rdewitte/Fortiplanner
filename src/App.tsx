@@ -166,7 +166,7 @@ function FloorCanvas({floor,cameras,annotations,zones,zoneDraft,selCamId,selWall
                       onScalePt1,onScalePt2,onWallClick,onZoneClick,onZoneDblClick,zoneType,
                       scalePt2,
                       onCanvasMouseMove,
-                      zoom,panX,panY,onZoom,onPanDelta}){
+                      zoom,panX,panY,onZoom,onPanDelta,onWrapSize}){
   const cvRef=useRef(null);
   const wrapRef=useRef(null);
   const imgEl=useRef(null);
@@ -218,12 +218,18 @@ function FloorCanvas({floor,cameras,annotations,zones,zoneDraft,selCamId,selWall
     const el=wrapRef.current; if(!el) return;
     const ro=new ResizeObserver(entries=>{
       const {width,height}=entries[0].contentRect;
-      if(width>0&&height>0) setWrapSize({w:Math.floor(width),h:Math.floor(height)});
+      if(width>0&&height>0){
+        setWrapSize({w:Math.floor(width),h:Math.floor(height)});
+        if(onWrapSize) onWrapSize({w:Math.floor(width),h:Math.floor(height)});
+      }
     });
     ro.observe(el);
-    // Initial size
     const r=el.getBoundingClientRect();
-    if(r.width>0) setWrapSize({w:Math.floor(r.width),h:Math.floor(r.height)});
+    if(r.width>0){
+      const ws={w:Math.floor(r.width),h:Math.floor(r.height)};
+      setWrapSize(ws);
+      if(onWrapSize) onWrapSize(ws);
+    }
     return()=>ro.disconnect();
   },[]);
   const IW = floor.imgW || wrapSize.w;
@@ -744,7 +750,7 @@ function FloorCanvas({floor,cameras,annotations,zones,zoneDraft,selCamId,selWall
   };
 
   return(
-    <div ref={wrapRef} style={{flex:1,overflow:"hidden",background:"#1e2333",position:"relative"}}>
+    <div ref={wrapRef} style={{flex:1,minWidth:0,overflow:"hidden",background:"#1e2333",position:"relative"}}>
       <canvas ref={cvRef} width={IW} height={IH}
         style={{
           // KEY FIX: fill the wrapper exactly — no objectFit, no letterboxing
@@ -766,7 +772,27 @@ function FloorCanvas({floor,cameras,annotations,zones,zoneDraft,selCamId,selWall
 
 
 // ─── Main App ─────────────────────────────────────────────────────────────────
+const FORTINET_LOGO_URI = null; // PNG embed removed — use SVG instead
+
+function FortinetLogo({size=34}){
+  return React.createElement("svg",{width:size,height:size,viewBox:"0 0 60 60",fill:"none",style:{flexShrink:0}},
+    React.createElement("path",{d:"M30 4L8 14v16c0 13.3 9.3 25.7 22 29 12.7-3.3 22-15.7 22-29V14L30 4z",fill:"#DA291C"}),
+    React.createElement("rect",{x:20,y:20,width:20,height:4,rx:1,fill:"white"}),
+    React.createElement("rect",{x:20,y:29,width:13,height:4,rx:1,fill:"white"})
+  );
+}
+
 export default function App(){
+  // Responsive layout breakpoints
+  const [winW,setWinW]=useState(window.innerWidth);
+  useEffect(()=>{
+    const h=()=>setWinW(window.innerWidth);
+    window.addEventListener("resize",h);
+    return()=>window.removeEventListener("resize",h);
+  },[]);
+  const isNarrow = winW < 1100;  // hide right sidebar below 1100px
+  const isTiny   = winW < 750;   // compact tool panel, hide tree below 750px
+
   const [tab,setTab]=useState("planner");
   const _init=React.useMemo(()=>defProject(),[]);
   const [project,setProject]=useState(_init);
@@ -810,6 +836,7 @@ export default function App(){
   const fileRef=useRef(null);
   const projFileRef=useRef(null);
   const nid=useRef(1);
+  const canvasWrapRef=useRef(null); // direct ref to cvRow for accurate fit measurements
 
   // Undo/Redo — snapshot before every project mutation
   const MAX_UNDO=40;
@@ -843,7 +870,27 @@ export default function App(){
   const updCams=fn=>updFloor(f=>fn(f.cameras));
   const updWalls=fn=>updFloor(f=>{if(!f.walls)f.walls=[];fn(f.walls);});
 
-  const resetView=()=>{setZoom(1);setPanX(0);setPanY(0);};
+  // Container size reported by FloorCanvas ResizeObserver
+  const [containerSize,setContainerSize]=useState({w:900,h:550});
+  const containerSizeRef=useRef({w:900,h:550}); // always current, no stale closure
+
+  const resetView=()=>{
+    // Read directly from the DOM — most accurate, no stale closure possible
+    const el=canvasWrapRef.current;
+    const rect=el?el.getBoundingClientRect():null;
+    const cw=rect&&rect.width>10?rect.width:containerSizeRef.current.w;
+    const ch=rect&&rect.height>10?rect.height:containerSizeRef.current.h;
+    const IW=activeF?.imgW||cw;
+    const IH=activeF?.imgH||ch;
+    if(cw<=0||ch<=0){setZoom(1);setPanX(0);setPanY(0);return;}
+    // Scale from CSS pixels to canvas pixels
+    // The canvas inside FloorCanvas has pixel size IW×IH drawn at CSS width/height of cw×ch
+    // So 1 canvas-px = cw/IW CSS-px → zoom = cw/IW fills width, ch/IH fills height
+    const fitZoom=Math.min(cw/IW, ch/IH)*0.97;
+    setZoom(fitZoom);
+    setPanX(0);
+    setPanY(0);
+  };
 
   const handleZoom=(factor,cx,cy)=>{
     setZoom(z=>{
@@ -858,18 +905,26 @@ export default function App(){
   const handleUpload=e=>{
     const file=e.target.files[0];if(!file)return;
     setImporting(true);
-    const reader=new FileReader();
-    reader.onload=ev=>{
-      const url=ev.target.result;
-      const im=new Image();
-      im.onload=()=>{
-        updFloor(f=>{f.img=url;f.imgW=im.naturalWidth;f.imgH=im.naturalHeight;f.pxPerFt=null;f._scalePt1=null;if(!f.walls)f.walls=[];});
-        resetView(); setImporting(false);
+    // requestAnimationFrame gives React time to paint the spinner before heavy work
+    requestAnimationFrame(()=>requestAnimationFrame(()=>{
+      const reader=new FileReader();
+      reader.onload=ev=>{
+        const url=ev.target.result;
+        const im=new Image();
+        im.onload=()=>{
+          updFloor(f=>{f.img=url;f.imgW=im.naturalWidth;f.imgH=im.naturalHeight;f.pxPerFt=null;f._scalePt1=null;if(!f.walls)f.walls=[];});
+          // Wait one more frame so the floor state is committed before fitting
+          requestAnimationFrame(()=>{
+            resetView();
+            setImporting(false);
+          });
+        };
+        im.onerror=()=>setImporting(false);
+        im.src=url;
       };
-      im.onerror=()=>setImporting(false);
-      im.src=url;
-    };
-    reader.readAsDataURL(file);
+      reader.onerror=()=>setImporting(false);
+      reader.readAsDataURL(file);
+    }));
     e.target.value="";
   };
 
@@ -899,55 +954,293 @@ export default function App(){
     e.target.value="";
   };
 
-  // ── PDF export ────────────────────────────────────────────────────────────
+  // ── PDF export — all buildings, all floors + full BOM ────────────────────
   const exportPDF=async()=>{
-    if(!activeF?.img){alert("No floor plan image on this floor.");return;}
-    const IW=activeF.imgW||900, IH=activeF.imgH||550;
-    // Draw floor plan + cameras + walls onto an offscreen canvas, then export as PDF via print
-    const oc=document.createElement("canvas"); oc.width=IW; oc.height=IH;
-    const ctx=oc.getContext("2d");
-    // Draw floor plan
-    await new Promise(res=>{const im=new Image();im.onload=()=>{ctx.drawImage(im,0,0,IW,IH);res();};im.src=activeF.img;});
-    // Draw walls
-    (activeF.walls||[]).forEach(w=>{
-      ctx.strokeStyle="#1A1A2E"; ctx.lineWidth=w.thickness||8; ctx.lineCap="round";
-      ctx.beginPath(); ctx.moveTo(w.x1,w.y1); ctx.lineTo(w.x2,w.y2); ctx.stroke();
-    });
-    // Draw FOV cones
-    cameras.forEach(cam=>{
-      const def=CAMERA_DB.find(d=>d.model===cam.model); if(!def)return;
-      const range=ppf?def.irRange*3.281*ppf:70;
-      const dirRad=(cam.rotation*Math.PI)/180;
-      ctx.save();
-      if(def.fov<360){
-        const halfFov=(def.fov*Math.PI)/180/2;
-        const pts=buildVisPolygon(cam.x,cam.y,range,dirRad,halfFov,activeF.walls||[]);
-        ctx.fillStyle=def.color+"44"; ctx.strokeStyle=def.color; ctx.lineWidth=1.5;
-        ctx.beginPath(); ctx.moveTo(cam.x,cam.y); pts.forEach(p=>ctx.lineTo(p.x,p.y)); ctx.closePath();
-        ctx.fill(); ctx.stroke();
+    const hasSomeFloor=project.buildings.some(b=>b.floors.some(f=>f.img));
+    if(!hasSomeFloor){alert("No floor plan images uploaded yet.");return;}
+
+    // Helper: render one floor to a data URL
+    const renderFloor=async(b,f)=>{
+      const IW=f.imgW||900, IH=f.imgH||550;
+      const oc=document.createElement("canvas"); oc.width=IW; oc.height=IH;
+      const ctx=oc.getContext("2d");
+      // Floor plan image
+      if(f.img){
+        await new Promise(res=>{
+          const im=new Image();
+          im.onload=()=>{ctx.drawImage(im,0,0,IW,IH);res();};
+          im.onerror=res;
+          im.src=f.img;
+        });
       } else {
-        ctx.fillStyle=def.color+"44"; ctx.beginPath(); ctx.arc(cam.x,cam.y,range,0,Math.PI*2); ctx.fill();
+        ctx.fillStyle="#F0F2F4"; ctx.fillRect(0,0,IW,IH);
+        ctx.fillStyle="#AAAAAA"; ctx.font="24px Arial"; ctx.textAlign="center";
+        ctx.fillText("No floor plan image",IW/2,IH/2); ctx.textAlign="left";
       }
-      ctx.restore();
-      // Camera dot + label
-      const r=12; ctx.beginPath(); ctx.arc(cam.x,cam.y,r,0,Math.PI*2);
-      ctx.fillStyle=def.color; ctx.fill(); ctx.strokeStyle="#fff"; ctx.lineWidth=2; ctx.stroke();
-      ctx.fillStyle="#fff"; ctx.font="bold 10px Arial"; ctx.textAlign="center";
-      ctx.fillText(cam.label,cam.x,cam.y+4); ctx.textAlign="left";
-    });
-    // Watermark
-    ctx.fillStyle="rgba(26,26,46,0.6)"; ctx.fillRect(0,IH-22,IW,22);
-    ctx.fillStyle="#fff"; ctx.font="bold 10px Arial"; ctx.textAlign="left";
-    ctx.fillText("FortiCamera Planner  |  "+project.name+"  |  "+activeB.name+" / "+activeF.name+"  |  "+cameras.length+" cameras  |  "+new Date().toLocaleDateString(),8,IH-7);
-    ctx.textAlign="left";
-    // Convert to data URL and trigger print dialog
-    const url=oc.toDataURL("image/png",1.0);
+      // Zones
+      (f.zones||[]).forEach(z=>{
+        if(z.pts.length<2)return;
+        const isCov=z.type==="coverage";
+        ctx.save(); ctx.globalAlpha=0.18;
+        ctx.fillStyle=isCov?"#00A651":"#DA291C";
+        ctx.beginPath(); ctx.moveTo(z.pts[0].x,z.pts[0].y);
+        z.pts.forEach(p=>ctx.lineTo(p.x,p.y));
+        ctx.closePath(); ctx.fill();
+        ctx.globalAlpha=0.7; ctx.strokeStyle=isCov?"#00A651":"#DA291C";
+        ctx.lineWidth=2; ctx.setLineDash([6,3]); ctx.stroke(); ctx.setLineDash([]);
+        ctx.restore();
+      });
+      // Walls
+      (f.walls||[]).forEach(w=>{
+        ctx.strokeStyle="#1A1A2E"; ctx.lineWidth=w.thickness||8; ctx.lineCap="round";
+        ctx.beginPath(); ctx.moveTo(w.x1,w.y1); ctx.lineTo(w.x2,w.y2); ctx.stroke();
+      });
+      // FOV cones
+      const fPpf=f.pxPerFt||null;
+      (f.cameras||[]).forEach(cam=>{
+        const def=CAMERA_DB.find(d=>d.model===cam.model); if(!def)return;
+        const range=fPpf?def.irRange*3.281*fPpf:70;
+        const camFov=cam.customFov!=null?cam.customFov:def.fov;
+        const dirRad=(cam.rotation*Math.PI)/180;
+        ctx.save();
+        if(camFov<360){
+          const halfFov=(camFov*Math.PI)/180/2;
+          const pts=buildVisPolygon(cam.x,cam.y,range,dirRad,halfFov,f.walls||[]);
+          ctx.fillStyle=def.color+"44"; ctx.strokeStyle=def.color; ctx.lineWidth=1.5;
+          ctx.beginPath(); ctx.moveTo(cam.x,cam.y);
+          pts.forEach(p=>ctx.lineTo(p.x,p.y)); ctx.closePath();
+          ctx.fill(); ctx.stroke();
+        } else {
+          ctx.fillStyle=def.color+"44";
+          ctx.beginPath(); ctx.arc(cam.x,cam.y,range,0,Math.PI*2); ctx.fill();
+        }
+        ctx.restore();
+        // Camera dot
+        const r=12;
+        ctx.beginPath(); ctx.arc(cam.x,cam.y,r,0,Math.PI*2);
+        ctx.fillStyle=def.color; ctx.fill();
+        ctx.strokeStyle="#fff"; ctx.lineWidth=2; ctx.stroke();
+        ctx.fillStyle="#fff"; ctx.font="bold 10px Arial"; ctx.textAlign="center";
+        ctx.fillText(cam.label,cam.x,cam.y+4); ctx.textAlign="left";
+      });
+      // Annotations
+      (f.annotations||[]).forEach(a=>{
+        if(!a.text)return;
+        ctx.save();
+        ctx.fillStyle="rgba(255,215,0,0.92)";
+        ctx.fillRect(a.x+12,a.y-10,Math.max(60,a.text.length*6),16);
+        ctx.fillStyle="#1A1A2E"; ctx.font="10px Arial";
+        ctx.fillText(a.text.split('\n')[0],a.x+15,a.y+3);
+        ctx.beginPath(); ctx.arc(a.x,a.y,7,0,Math.PI*2);
+        ctx.fillStyle="#E6A000"; ctx.fill();
+        ctx.restore();
+      });
+      // Footer bar
+      ctx.fillStyle="rgba(26,26,46,0.75)"; ctx.fillRect(0,IH-24,IW,24);
+      ctx.fillStyle="#fff"; ctx.font="bold 10px Arial"; ctx.textAlign="left";
+      ctx.fillText(
+        `FortiCamera Planner  |  ${project.name}  |  ${b.name} / ${f.name}`+
+        `  |  ${(f.cameras||[]).length} cameras`+
+        (fPpf?`  |  Scale: ${fPpf.toFixed(1)}px/ft`:"")+
+        `  |  ${new Date().toLocaleDateString()}`,
+        8,IH-8
+      );
+      return oc.toDataURL("image/png",0.95);
+    };
+
+    // ── Build HTML document ───────────────────────────────────────────────────
+    const CSS=`
+      *{box-sizing:border-box;margin:0;padding:0;}
+      body{font-family:'Segoe UI',Arial,sans-serif;color:#1A1A2E;background:#fff;}
+      .page{page-break-after:always;padding:12mm;}
+      .page:last-child{page-break-after:avoid;}
+      .cover{display:flex;flex-direction:column;justify-content:center;align-items:center;min-height:100vh;}
+      .cover h1{font-size:32px;color:#DA291C;margin-bottom:8px;}
+      .cover h2{font-size:18px;color:#1A1A2E;font-weight:400;margin-bottom:4px;}
+      .cover p{font-size:13px;color:#666;margin-top:16px;}
+      .floor-page h2{font-size:15px;color:#DA291C;border-bottom:2px solid #DA291C;padding-bottom:4px;margin-bottom:8px;}
+      .floor-page h3{font-size:12px;color:#1A1A2E;margin-bottom:6px;}
+      img.floorplan{width:100%;height:auto;border:1px solid #ddd;border-radius:4px;}
+      .cam-table{width:100%;border-collapse:collapse;margin-top:8px;font-size:10px;}
+      .cam-table th{background:#1A1A2E;color:#fff;padding:4px 6px;text-align:left;}
+      .cam-table td{padding:4px 6px;border-bottom:1px solid #eee;}
+      .cam-table tr:nth-child(even) td{background:#F5F5F5;}
+      .bom-page h2{font-size:15px;color:#DA291C;border-bottom:2px solid #DA291C;padding-bottom:4px;margin-bottom:12px;}
+      .bom-page h3{font-size:12px;color:#1A1A2E;margin:14px 0 6px;}
+      .bom-table{width:100%;border-collapse:collapse;font-size:10px;margin-bottom:8px;}
+      .bom-table th{background:#1A1A2E;color:#fff;padding:5px 7px;text-align:left;}
+      .bom-table td{padding:5px 7px;border-bottom:1px solid #eee;}
+      .bom-table tr:nth-child(even) td{background:#F5F5F5;}
+      .bom-table .qty{font-weight:700;color:#DA291C;font-size:13px;}
+      .bom-table .sku{font-weight:700;color:#DA291C;font-size:10px;}
+      .summary-box{background:#F5F5F5;border:1px solid #ddd;border-radius:6px;padding:12px;margin-bottom:12px;display:flex;gap:24px;flex-wrap:wrap;}
+      .summary-box .item{display:flex;flex-direction:column;}
+      .summary-box .label{font-size:9px;color:#888;text-transform:uppercase;letter-spacing:0.5px;}
+      .summary-box .value{font-size:16px;font-weight:700;color:#1A1A2E;}
+      .red{color:#DA291C;} .green{color:#00A651;} .orange{color:#F47920;}
+      @media print{
+        .page{padding:8mm;}
+        @page{size:A4 landscape;margin:8mm;}
+      }
+    `;
+
+    // Collect all floor images
+    const floorPages=[];
+    for(const b of project.buildings){
+      for(const f of b.floors){
+        const url=await renderFloor(b,f);
+        floorPages.push({b,f,url});
+      }
+    }
+
+    // BOM data
+    const allC=project.buildings.flatMap(b=>b.floors.flatMap(f=>
+      (f.cameras||[]).map(c=>({...c,bName:b.name,fName:f.name}))
+    ));
+    const totPoe=allC.reduce((s,c)=>{const d=CAMERA_DB.find(x=>x.model===c.model);return s+(d?d.poeBudget:0);},0);
+
+    // Global BOM counts
+    const globalCounts={};
+    allC.forEach(c=>{globalCounts[c.model]=(globalCounts[c.model]||0)+1;});
+
+    const recRow=selRec?RECORDER_DB.find(r=>r.sku===selRec):"";
+    const accRows=ACCESSORIES_DB.filter(a=>(bomAcc[a.sku]||0)>0);
+
+    // ── Generate HTML ──────────────────────────────────────────────────────────
+    let html=`<!DOCTYPE html><html><head><meta charset="utf-8">
+      <title>${project.name} — FortiCamera Planner Report</title>
+      <style>${CSS}</style></head><body>`;
+
+    // Cover page
+    html+=`<div class="page cover">
+      <img src="data:image/png;base64,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" style="width:80px;height:80px;object-fit:contain"/>
+      <h1>FortiCamera Planner</h1>
+      <h2>${project.name}</h2>
+      ${project.customer?`<h2 style="font-size:15px;color:#555">${project.customer}</h2>`:""}
+      <div class="summary-box" style="margin-top:24px;">
+        <div class="item"><span class="label">Buildings</span><span class="value">${project.buildings.length}</span></div>
+        <div class="item"><span class="label">Total Floors</span><span class="value">${project.buildings.reduce((s,b)=>s+b.floors.length,0)}</span></div>
+        <div class="item"><span class="label">Total Cameras</span><span class="value red">${allC.length}</span></div>
+        <div class="item"><span class="label">Total PoE</span><span class="value orange">${totPoe}W</span></div>
+        <div class="item"><span class="label">Recording</span><span class="value" style="font-size:12px">${recRow?recRow.name:"FortiCamera Cloud"}</span></div>
+        <div class="item"><span class="label">Date</span><span class="value" style="font-size:12px">${new Date().toLocaleDateString()}</span></div>
+      </div>
+      <p>Generated by FortiCamera Planner — Fortinet Partner Pre-Sales Tool</p>
+    </div>`;
+
+    // Floor plan pages
+    for(const {b,f,url} of floorPages){
+      const fCams=f.cameras||[];
+      const fPoe=fCams.reduce((s,c)=>{const d=CAMERA_DB.find(x=>x.model===c.model);return s+(d?d.poeBudget:0);},0);
+      // Group cameras by model for this floor
+      const fCounts={};
+      fCams.forEach(c=>{fCounts[c.model]=(fCounts[c.model]||0)+1;});
+
+      html+=`<div class="page floor-page">
+        <h2>🏢 ${b.name} — ${f.name}</h2>
+        <div style="display:flex;gap:8px;font-size:10px;color:#666;margin-bottom:8px;">
+          <span>📷 ${fCams.length} cameras</span>
+          <span>⚡ ${fPoe}W PoE</span>
+          ${f.pxPerFt?`<span>📐 Scale: ${f.pxPerFt.toFixed(1)}px/ft</span>`:""}
+          ${(f.walls||[]).length?`<span>🧱 ${f.walls.length} wall segments</span>`:""}
+        </div>
+        <img class="floorplan" src="${url}" alt="${b.name} / ${f.name}"/>
+        ${fCams.length>0?`
+        <h3 style="margin-top:10px;">Camera Placement</h3>
+        <table class="cam-table">
+          <thead><tr><th>Label</th><th>Model</th><th>Zone / Location</th><th>Rotation</th><th>PoE</th></tr></thead>
+          <tbody>
+            ${fCams.map(c=>{
+              const d=CAMERA_DB.find(x=>x.model===c.model);
+              return`<tr>
+                <td><strong>${c.label}</strong></td>
+                <td class="sku">${d?d.sku:c.model}</td>
+                <td>${c.location||"—"}</td>
+                <td>${c.rotation}°</td>
+                <td>${d?d.poeStd:""}</td>
+              </tr>`;
+            }).join("")}
+          </tbody>
+        </table>`:"<p style='font-size:11px;color:#888;margin-top:10px;'>No cameras placed on this floor.</p>"}
+      </div>`;
+    }
+
+    // BOM page — summary then per-building breakdown
+    html+=`<div class="page bom-page">
+      <h2>📋 Bill of Materials</h2>
+      <div class="summary-box">
+        <div class="item"><span class="label">Project</span><span class="value" style="font-size:13px">${project.name}</span></div>
+        <div class="item"><span class="label">Customer</span><span class="value" style="font-size:13px">${project.customer||"—"}</span></div>
+        <div class="item"><span class="label">Total Cameras</span><span class="value red">${allC.length}</span></div>
+        <div class="item"><span class="label">Total PoE Load</span><span class="value orange">${totPoe}W</span></div>
+        <div class="item"><span class="label">Date</span><span class="value" style="font-size:12px">${new Date().toLocaleDateString()}</span></div>
+      </div>
+
+      <h3>Camera SKU Summary — All Buildings</h3>
+      <table class="bom-table">
+        <thead><tr><th>SKU</th><th>Description</th><th>Type</th><th>PoE</th><th style="text-align:right">Qty</th></tr></thead>
+        <tbody>
+          ${Object.entries(globalCounts).map(([m,qty])=>{
+            const d=CAMERA_DB.find(x=>x.model===m);
+            return`<tr>
+              <td class="sku">${d?d.sku:m}</td>
+              <td>${d?d.name:m}</td>
+              <td style="color:#555;font-size:9px">${d?d.type:""}</td>
+              <td>${d?`<span style="background:${d.poeStd==="802.3at"?"#F47920":"#00A651"};color:#fff;padding:1px 5px;border-radius:3px;font-size:9px">${d.poeStd}</span>`:""}</td>
+              <td style="text-align:right" class="qty">×${qty}</td>
+            </tr>`;
+          }).join("")}
+        </tbody>
+      </table>
+
+      ${recRow?`<h3>Recording</h3>
+      <table class="bom-table"><thead><tr><th>SKU</th><th>Description</th><th>Form Factor</th><th>Storage</th><th style="text-align:right">Qty</th></tr></thead>
+      <tbody><tr><td class="sku">${recRow.sku}</td><td>${recRow.name}</td><td>${recRow.form}</td><td>${recRow.hdd}</td><td style="text-align:right" class="qty">×1</td></tr></tbody>
+      </table>`:""}
+
+      ${accRows.length>0?`<h3>Accessories &amp; Licensing</h3>
+      <table class="bom-table"><thead><tr><th>SKU</th><th>Description</th><th>Category</th><th style="text-align:right">Qty</th></tr></thead>
+      <tbody>${accRows.map(a=>`<tr><td class="sku">${a.sku}</td><td>${a.name}</td><td>${a.cat}</td><td style="text-align:right" class="qty">×${bomAcc[a.sku]}</td></tr>`).join("")}</tbody>
+      </table>`:""}
+
+      ${project.buildings.map(b=>`
+      <h3 style="margin-top:16px;border-top:1px solid #eee;padding-top:10px;">🏢 ${b.name} — Detail per Floor</h3>
+      ${b.floors.map(f=>{
+        const fCams=f.cameras||[];
+        if(!fCams.length)return`<p style="font-size:10px;color:#888;margin-left:12px;">📋 ${f.name}: no cameras</p>`;
+        const fCounts={};
+        fCams.forEach(c=>{fCounts[c.model]=(fCounts[c.model]||0)+1;});
+        const fPoe=fCams.reduce((s,c)=>{const d=CAMERA_DB.find(x=>x.model===c.model);return s+(d?d.poeBudget:0);},0);
+        return`<div style="margin-left:12px;margin-bottom:10px;">
+          <p style="font-size:11px;font-weight:600;color:#1A1A2E;margin-bottom:4px;">📋 ${f.name} — ${fCams.length} cameras, ${fPoe}W PoE</p>
+          <table class="bom-table" style="margin-bottom:0">
+            <thead><tr><th>SKU</th><th>Description</th><th style="text-align:right">Qty</th><th>Zones / Labels</th></tr></thead>
+            <tbody>
+              ${Object.entries(fCounts).map(([m,qty])=>{
+                const d=CAMERA_DB.find(x=>x.model===m);
+                const camsOfModel=fCams.filter(c=>c.model===m);
+                const zones=camsOfModel.map(c=>c.location||c.label).join(", ");
+                return`<tr>
+                  <td class="sku">${d?d.sku:m}</td>
+                  <td>${d?d.name:m}</td>
+                  <td style="text-align:right" class="qty">×${qty}</td>
+                  <td style="font-size:9px;color:#555">${zones}</td>
+                </tr>`;
+              }).join("")}
+            </tbody>
+          </table>
+        </div>`;
+      }).join("")}`).join("")}
+    </div>`;
+
+    html+=`</body></html>`;
+
     const win=window.open("","_blank");
-    win.document.write(`<html><head><title>${project.name} - ${activeF.name}</title>
-      <style>body{margin:0;padding:0;}img{max-width:100%;height:auto;}
-      @media print{body{margin:0;}@page{size:landscape;margin:10mm;}}</style></head>
-      <body><img src="${url}" onload="setTimeout(()=>{window.print();window.close();},400)"/></body></html>`);
+    if(!win){alert("Please allow popups for this site to export PDF.");return;}
+    win.document.write(html);
     win.document.close();
+    // Give images time to load then print
+    win.onload=()=>setTimeout(()=>win.print(),800);
   };
 
   // ── Scale handlers ────────────────────────────────────────────────────────
@@ -1234,15 +1527,15 @@ export default function App(){
     tabs:{display:"flex",marginLeft:"auto"},
     tab:a=>({padding:"0 14px",height:50,display:"flex",alignItems:"center",border:"none",cursor:"pointer",fontSize:12,fontWeight:600,background:a?FT.red:"transparent",color:a?FT.white:"rgba(255,255,255,0.65)",borderBottom:a?"3px solid #FF6B35":"3px solid transparent"}),
     body:{display:"flex",flex:1,overflow:"hidden"},
-    tree:{width:205,background:DM.surface,borderRight:"1px solid "+DM.border,display:"flex",flexDirection:"column",flexShrink:0},
+    tree:(isTiny?{display:"none"}:{width:isNarrow?160:205,background:DM.surface,borderRight:"1px solid "+DM.border,display:"flex",flexDirection:"column",flexShrink:0}),
     tHdr:{padding:"9px 11px",borderBottom:"2px solid "+FT.red,fontSize:10,fontWeight:700,color:FT.navy,textTransform:"uppercase",letterSpacing:1,display:"flex",justifyContent:"space-between",alignItems:"center"},
     tScr:{flex:1,overflowY:"auto"},
     tI:(a,d)=>({padding:`5px ${7+d*13}px`,cursor:"pointer",fontSize:11,background:a?darkMode?"#2A1A1E":"#FFF0EF":"transparent",color:a?FT.red:DM.textSub,borderLeft:a?"3px solid "+FT.red:"3px solid transparent",display:"flex",alignItems:"center",gap:4}),
     tBot:{borderTop:"1px solid "+DM.border,padding:"7px 11px",fontSize:10,color:DM.textSub},
-    main:{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"},
+    main:{flex:1,minWidth:0,display:"flex",flexDirection:"column",overflow:"hidden"},
     tbar:{background:DM.surface,borderBottom:"1px solid "+DM.border,padding:"5px 9px",display:"flex",alignItems:"center",gap:5,flexShrink:0,flexWrap:"wrap"},
     cvRow:{flex:1,display:"flex",overflow:"hidden",position:"relative"},
-    sb:{width:232,background:DM.surface,borderLeft:"1px solid "+DM.border,overflowY:"auto",padding:9,flexShrink:0},
+    sb:(isNarrow?{display:"none"}:{width:232,background:DM.surface,borderLeft:"1px solid "+DM.border,overflowY:"auto",padding:9,flexShrink:0}),
     pan:{background:DM.surface,border:"1px solid "+DM.border,borderRadius:5,padding:9,marginBottom:7},
     panR:{background:DM.surface,borderTop:"3px solid "+FT.red,border:"1px solid "+DM.border,borderRadius:5,padding:9,marginBottom:7},
     lbl:{fontSize:9,color:FT.grayMid,textTransform:"uppercase",letterSpacing:1,marginBottom:2},
@@ -1259,32 +1552,21 @@ export default function App(){
   };
   const TABS=[["planner","Floor Plan"],["quality","Quality"],["bom","BOM"]];
 
-  const Logo=()=>(
-    <svg width="34" height="34" viewBox="0 0 60 60" fill="none" style={{flexShrink:0}}>
-      <path d="M30 4L8 14v16c0 13.3 9.3 25.7 22 29 12.7-3.3 22-15.7 22-29V14L30 4z" fill="#DA291C"/>
-      <rect x="20" y="20" width="20" height="4" rx="1" fill="white"/>
-      <rect x="20" y="29" width="13" height="4" rx="1" fill="white"/>
-    </svg>
-  );
 
   return(
     <div style={S.app}>
-      {/* ── Header ──────────────────────────────────────────────────────────── */}
       <div style={S.hdr}>
         <div style={{display:"flex",alignItems:"center",gap:9}}>
-          <Logo/>
-          <div><div style={S.lTxt}>FortiCamera Planner</div><div style={S.lSub}>VIDEO SURVEILLANCE DESIGN TOOL</div></div>
+          <FortinetLogo/>
+          {!isTiny&&<div><div style={S.lTxt}>FortiCamera Planner</div><div style={S.lSub}>VIDEO SURVEILLANCE DESIGN TOOL</div></div>}
         </div>
-        <input value={project.name} onChange={e=>updProject(np=>np.name=e.target.value)}
-          style={{...S.inp,width:150,padding:"2px 7px",fontSize:12,fontWeight:600,background:"rgba(255,255,255,0.1)",color:FT.white,border:"1px solid rgba(255,255,255,0.2)",marginLeft:10}}/>
+        {!isTiny&&<input value={project.name} onChange={e=>updProject(np=>np.name=e.target.value)}
+          style={{...S.inp,width:isNarrow?110:150,padding:"2px 7px",fontSize:12,fontWeight:600,background:"rgba(255,255,255,0.1)",color:FT.white,border:"1px solid rgba(255,255,255,0.2)",marginLeft:10}}/>}
         {/* Save / Load */}
         <input type="file" accept=".fcplan,.json" ref={projFileRef} style={{display:"none"}} onChange={loadProject}/>
         <button style={{...S.btn("ghost"),fontSize:10,padding:"3px 9px",marginLeft:6}} onClick={()=>projFileRef.current.click()}>📂 Load</button>
         <button style={{...S.btn("ghost"),fontSize:10,padding:"3px 9px"}} onClick={saveProject}>💾 Save</button>
-        <button style={{...S.btn("ghost"),fontSize:10,padding:"3px 9px",opacity:undoStack.length?1:0.35}} onClick={undo} title="Undo (Ctrl+Z)" disabled={!undoStack.length}>↩ Undo</button>
-        <button style={{...S.btn("ghost"),fontSize:10,padding:"3px 9px",opacity:redoStack.length?1:0.35}} onClick={redo} title="Redo (Ctrl+Y)" disabled={!redoStack.length}>↪ Redo</button>
-        <button style={{...S.btn("ghost"),fontSize:10,padding:"3px 9px"}} onClick={()=>setDarkMode(d=>!d)}>{darkMode?"☀️ Light":"🌙 Dark"}</button>
-        <div style={S.tabs}>{TABS.map(([k,l])=><button key={k} style={S.tab(tab===k)} onClick={()=>setTab(k)}>{l}</button>)}</div>
+        <div style={S.tabs}>{TABS.map(([k,l])=><button key={k} style={S.tab(tab===k)} onClick={()=>setTab(k)}>{isTiny?l[0]:l}</button>)}</div>
       </div>
 
       <div style={S.body}>
@@ -1332,87 +1614,108 @@ export default function App(){
           </div>
         </div>
 
+        {/* ── Vertical Tool Panel ─────────────────────────────────────────── */}
+        {tab==="planner"&&<div style={{
+          width:isTiny?40:52,background:DM.surface,borderRight:"1px solid "+DM.border,
+          display:"flex",flexDirection:"column",alignItems:"center",
+          padding:"6px 0",gap:2,flexShrink:0,overflowY:"auto",
+        }}>
+          {/* File ops */}
+          {(()=>{
+            const Btn=({icon,label,onClick,active,color,title})=>(
+              <button onClick={onClick} title={title||label}
+                style={{width:isTiny?36:44,height:isTiny?36:44,border:"none",borderRadius:6,cursor:"pointer",
+                  display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",
+                  gap:1,background:active?(color||FT.red):"transparent",
+                  color:active?FT.white:DM.textSub,fontSize:18,lineHeight:1,
+                  borderLeft:active?"3px solid "+(color||FT.red):"3px solid transparent",
+                }}>
+                <span style={{fontSize:isTiny?13:16}}>{icon}</span>
+                {!isTiny&&<span style={{fontSize:7,fontWeight:600,letterSpacing:0.3,opacity:0.85}}>{label}</span>}
+              </button>
+            );
+            const Div=()=><div style={{width:36,height:1,background:DM.border,margin:"3px 0"}}/>;
+            return(<>
+              <input type="file" accept="image/*" ref={fileRef} style={{display:"none"}} onChange={handleUpload}/>
+              <Btn icon="📂" label="Upload" onClick={()=>fileRef.current.click()} title="Upload floor plan"/>
+              {activeF?.img&&<Btn icon="🖨" label="PDF" onClick={exportPDF} title="Export PDF"/>}
+              <Div/>
+              {/* Scale */}
+              {!ppf
+                ?<Btn icon="📐" label="Scale" onClick={()=>{setMode("scale");setScalePt1(null);setScalePt2(null);}} active={mode==="scale"||mode==="scale2"||mode==="scale_confirm"} color={FT.orange} title="Set scale calibration"/>
+                :<Btn icon="📐" label={ppf.toFixed(0)+"p/f"} onClick={()=>updFloor(f=>{f.pxPerFt=null;})} active color={FT.green} title={`Calibrated: ${ppf.toFixed(1)}px/ft — click to reset`}/>
+              }
+              <Div/>
+              {/* Mode tools */}
+              <Btn icon="🎥" label="Camera" onClick={()=>{setMode("camera");setWallDraft(null);setZoneDraft(null);}} active={mode==="camera"} title="Camera mode"/>
+              <Btn icon="🧱" label="Wall" onClick={()=>{setMode("wall");setWallDraft(null);}} active={mode==="wall"} color={FT.red} title="Draw walls"/>
+              <Btn icon="✏️" label="Edit" onClick={()=>{setMode("wall_edit");setWallDraft(null);}} active={mode==="wall_edit"} color="#4488FF" title="Edit walls"/>
+              <Btn icon="📝" label="Notes" onClick={()=>{setMode("annotate");setSelAnnotId(null);setEditAnnotId(null);}} active={mode==="annotate"} color="#E6A000" title="Add notes"/>
+              <Div/>
+              {/* Zones */}
+              <Btn icon="✅" label="Cover" onClick={()=>{setZoneType("coverage");setMode("zone");setZoneDraft(null);}} active={mode==="zone"&&zoneType==="coverage"} color={FT.green} title="Draw coverage zone"/>
+              <Btn icon="🚫" label="Excl" onClick={()=>{setZoneType("exclusion");setMode("zone");setZoneDraft(null);}} active={mode==="zone"&&zoneType==="exclusion"} color={FT.red} title="Draw exclusion zone"/>
+              {zones.length>0&&<Btn icon="🗑" label="Zones" onClick={()=>{setZoneDraft(null);clearZones();}} color={FT.grayDark} title="Clear all zones"/>}
+              <Div/>
+              {/* View */}
+              <Btn icon={showFov?"👁":"👁‍🗨"} label="FOV" onClick={()=>setShowFov(v=>!v)} active={showFov} color={FT.accent} title="Toggle FOV cones"/>
+              <Btn icon="＋" label={Math.round(zoom*100)+"%"} onClick={()=>handleZoom(1.25)} title="Zoom in"/>
+              <Btn icon="－" label="Zoom" onClick={()=>handleZoom(1/1.25)} title="Zoom out"/>
+              <Btn icon="⊡" label="Fit" onClick={resetView} title="Reset view"/>
+              <Div/>
+              {/* Undo/Redo */}
+              <Btn icon="↩" label="Undo" onClick={undo} active={false} color={FT.grayDark} title="Undo (Ctrl+Z)" style={{opacity:undoStack.length?1:0.3}}/>
+              <Btn icon="↪" label="Redo" onClick={redo} active={false} color={FT.grayDark} title="Redo (Ctrl+Y)"/>
+              <Div/>
+              <Btn icon={darkMode?"☀️":"🌙"} label={darkMode?"Light":"Dark"} onClick={()=>setDarkMode(d=>!d)} title="Toggle dark mode"/>
+            </>);
+          })()}
+        </div>}
+
         {/* ── Main content ─────────────────────────────────────────────────── */}
         <div style={S.main}>
 
 {/* ════ FLOOR PLAN TAB ════════════════════════════════════════════════════ */}
 {tab==="planner"&&<>
-  <div style={S.tbar}>
-    <input type="file" accept="image/*" ref={fileRef} style={{display:"none"}} onChange={handleUpload}/>
-    <button style={S.btn("primary")} onClick={()=>fileRef.current.click()}>📂 Upload Plan</button>
-    {activeF?.img&&<>
-      <button style={S.btn("ghost")} onClick={()=>{updFloor(f=>{f.img=null;f.imgW=0;f.imgH=0;f.pxPerFt=null;f.walls=[];});resetView();}}>✕ Clear</button>
-      <button style={S.btn("navy")} onClick={exportPDF}>🖨 PDF</button>
-    </>}
-    <div style={S.div}/>
+  {/* ── Top toolbar: camera controls + context info ────────────────────── */}
+  <div style={{background:DM.surface,borderBottom:"1px solid "+DM.border,padding:"5px 10px",
+    display:"flex",alignItems:"center",gap:6,flexShrink:0,flexWrap:"nowrap",overflowX:"auto"}}>
 
-    {/* Scale */}
-    {!ppf&&mode==="camera"&&<button style={S.btn("warn")} onClick={()=>{setMode("scale");setScalePt1(null);setScalePt2(null);}}>📐 Set Scale</button>}
-    {mode==="scale"&&<><span style={{fontSize:10,color:FT.orange,fontWeight:600}}>→ Click pt 1</span><button style={S.btn("ghost")} onClick={()=>{setMode("camera");setScalePt1(null);}}>Cancel</button></>}
-    {mode==="scale2"&&<><span style={{fontSize:10,color:FT.orange,fontWeight:600}}>→ Click pt 2</span><button style={S.btn("ghost")} onClick={()=>{setMode("camera");setScalePt1(null);}}>Cancel</button></>}
-    {mode==="scale_confirm"&&scalePt2&&<>
-      <span style={{fontSize:10,color:FT.green,fontWeight:600}}>✓ Pts set — distance =</span>
-      <input type="number" min={1} value={scaleFeet} onChange={e=>setScaleFeet(e.target.value)} style={{...S.inp,width:54,padding:"2px 5px",textAlign:"center"}}/>
-      <span style={{fontSize:10}}>ft</span>
-      <button style={S.btn("success")} onClick={applyScale}>Apply</button>
-      <button style={S.btn("ghost")} onClick={()=>{setScalePt1(null);setScalePt2(null);setMode("camera");}}>Cancel</button>
-    </>}
-    {ppf&&mode==="camera"&&<>
-      <span style={{fontSize:10,background:FT.green,color:FT.white,padding:"1px 7px",borderRadius:3,fontWeight:600}}>✓ {ppf.toFixed(1)}px/ft</span>
-      <button style={{...S.btn("ghost"),fontSize:9}} onClick={()=>updFloor(f=>{f.pxPerFt=null;})}>Re-cal</button>
-    </>}
-    <div style={S.div}/>
-
-    {/* Mode buttons */}
-    <button style={S.mBtn(mode==="camera")} onClick={()=>{setMode("camera");setWallDraft(null);}}>🎥 Camera</button>
-    <button style={S.mBtn(mode==="wall",FT.red)} onClick={()=>{setMode(mode==="wall"?"camera":"wall");setWallDraft(null);}}>🧱 Draw Wall</button>
-    <button style={S.mBtn(mode==="wall_edit","#4488FF")} onClick={()=>{setMode(mode==="wall_edit"?"camera":"wall_edit");setWallDraft(null);}}>✏️ Edit Wall</button>
-    <button style={S.mBtn(mode==="annotate","#E6B800")} onClick={()=>{setMode(mode==="annotate"?"camera":"annotate");setSelAnnotId(null);setEditAnnotId(null);}}>📝 Notes</button>
-    <div style={S.div}/>
-    <button style={S.mBtn(mode==="zone"&&zoneType==="coverage",FT.green)}
-      onClick={()=>{setZoneType("coverage");setMode(mode==="zone"&&zoneType==="coverage"?"camera":"zone");setZoneDraft(null);}}>✅ Coverage</button>
-    <button style={S.mBtn(mode==="zone"&&zoneType==="exclusion",FT.red)}
-      onClick={()=>{setZoneType("exclusion");setMode(mode==="zone"&&zoneType==="exclusion"?"camera":"zone");setZoneDraft(null);}}>🚫 Exclude</button>
-    {(zones.length>0||zoneDraft)&&<button style={{...S.btn("ghost"),fontSize:9}} onClick={()=>{setZoneDraft(null);clearZones();}}>🗑 Zones</button>}
-    {mode==="wall"&&<>
-      <span style={{fontSize:10,color:FT.grayDark}}>Thick:</span>
-      <input type="range" min={3} max={24} value={wallThick} onChange={e=>setWallThick(+e.target.value)} style={{width:55,accentColor:FT.red}}/>
-      <span style={{fontSize:10,color:FT.grayDark,width:14}}>{wallThick}</span>
-      <label style={{display:"flex",alignItems:"center",gap:3,cursor:"pointer",fontSize:10,color:FT.grayDark}}>
-        <input type="checkbox" checked={showSnap} onChange={e=>setShowSnap(e.target.checked)}/> Snap
-      </label>
-    </>}
-    {mode==="wall_edit"&&selWallId&&<>
-      <span style={{fontSize:10,color:"#4488FF",fontWeight:600}}>Wall selected</span>
-      <button style={{...S.btn("blue"),fontSize:10}} onClick={()=>delWall(selWallId)}>🗑 Delete</button>
-    </>}
-    {walls.length>0&&mode!=="wall_edit"&&<button style={{...S.btn("ghost"),fontSize:9}} onClick={()=>updWalls(ws=>{ws.length=0;setSelWallId(null);})}>🗑 Walls</button>}
-    <div style={S.div}/>
-
-    {/* Camera */}
-    <select style={{...S.sel,width:180}} value={selModel} onChange={e=>setSelModel(e.target.value)}>
-      <optgroup label="Cloud">{CAMERA_DB.filter(d=>d.cloudOnly).map(d=><option key={d.model} value={d.model}>{d.model}</option>)}</optgroup>
-      <optgroup label="Recorder">{CAMERA_DB.filter(d=>!d.cloudOnly).map(d=><option key={d.model} value={d.model}>{d.model}</option>)}</optgroup>
+    {/* Camera model selector — always visible, full readable size */}
+    <select value={selModel} onChange={e=>setSelModel(e.target.value)}
+      style={{...S.sel,width:180,fontSize:11,flexShrink:0}}>
+      <optgroup label="── Cloud ──">{CAMERA_DB.filter(d=>d.cloudOnly).map(d=><option key={d.model} value={d.model}>{d.model} — {d.resolution} {d.fov}°</option>)}</optgroup>
+      <optgroup label="── Recorder ──">{CAMERA_DB.filter(d=>!d.cloudOnly).map(d=><option key={d.model} value={d.model}>{d.model} — {d.resolution} {d.fov}°</option>)}</optgroup>
     </select>
-    <button style={S.btn("navy")} onClick={addCamera}>＋ Add</button>
-    <button style={{...S.btn("success"),fontSize:10}} onClick={()=>setShowOptimizer(v=>!v)}>🎯 Optimize</button>
-    <label style={{display:"flex",alignItems:"center",gap:3,cursor:"pointer",fontSize:10,color:FT.grayDark}}>
-      <input type="checkbox" checked={showFov} onChange={e=>setShowFov(e.target.checked)}/> FOV
-    </label>
-    <div style={S.div}/>
+    <button style={{...S.btn("navy"),flexShrink:0}} onClick={addCamera}>＋ Add Camera</button>
+    <button style={{...S.btn("success"),flexShrink:0,fontSize:11}} onClick={()=>setShowOptimizer(v=>!v)}>🎯 Optimize</button>
 
-    {/* Zoom */}
-    <button style={{...S.btn("ghost"),padding:"3px 7px"}} onClick={()=>handleZoom(1.25)}>＋</button>
-    <span style={{fontSize:10,color:FT.grayDark,minWidth:32,textAlign:"center"}}>{Math.round(zoom*100)}%</span>
-    <button style={{...S.btn("ghost"),padding:"3px 7px"}} onClick={()=>handleZoom(1/1.25)}>－</button>
-    <button style={{...S.btn("ghost"),fontSize:9}} onClick={resetView}>Fit</button>
-    <span style={{fontSize:9,color:FT.grayMid}}>scroll·right-drag=pan</span>
-    <span style={{marginLeft:"auto",fontSize:10,color:FT.grayMid}}>
-      <strong style={{color:FT.red}}>{activeB?.name}</strong>/<strong style={{color:FT.navy}}>{activeF?.name}</strong>
-      &nbsp;{cameras.length}cam·{walls.length}wall
-    </span>
+    <div style={{width:1,height:20,background:DM.border,margin:"0 4px",flexShrink:0}}/>
+
+    {/* Context info / mode instructions */}
+    <div style={{display:"flex",alignItems:"center",gap:5,fontSize:10,color:DM.textSub,flex:1,overflow:"hidden"}}>
+      {mode==="camera"&&<>
+        <span style={{color:DM.muted,fontSize:9,whiteSpace:"nowrap"}}>
+          <strong style={{color:FT.red}}>{activeB?.name}</strong>/<strong style={{color:darkMode?"#8888CC":FT.navy}}>{activeF?.name}</strong>
+          &nbsp;· {cameras.length} cam · {walls.length} wall · {zones.length} zone
+        </span>
+        {ppf&&<span style={{background:FT.green,color:FT.white,padding:"1px 7px",borderRadius:3,fontWeight:600,fontSize:9,flexShrink:0}}>✓ {ppf.toFixed(1)}px/ft</span>}
+      </>}
+      {mode==="scale"&&<><span style={{color:FT.orange,fontWeight:700,whiteSpace:"nowrap"}}>📐 SCALE</span><span style={{color:DM.muted,marginLeft:4,whiteSpace:"nowrap"}}>click point 1</span><button style={{...S.btn("ghost"),fontSize:9,marginLeft:"auto"}} onClick={()=>{setMode("camera");setScalePt1(null);}}>✕ Cancel</button></>}
+      {mode==="scale2"&&<><span style={{color:FT.orange,fontWeight:700,whiteSpace:"nowrap"}}>📐 SCALE</span><span style={{color:DM.muted,marginLeft:4,whiteSpace:"nowrap"}}>click point 2</span><button style={{...S.btn("ghost"),fontSize:9,marginLeft:"auto"}} onClick={()=>{setMode("camera");setScalePt1(null);}}>✕ Cancel</button></>}
+      {mode==="scale_confirm"&&scalePt2&&<>
+        <span style={{color:FT.green,fontWeight:700,whiteSpace:"nowrap"}}>✓ Both points set — distance =</span>
+        <input type="number" min={1} value={scaleFeet} onChange={e=>setScaleFeet(e.target.value)} style={{...S.inp,width:56,padding:"2px 5px",textAlign:"center"}}/>
+        <span>ft</span>
+        <button style={S.btn("success")} onClick={applyScale}>✓ Apply</button>
+        <button style={S.btn("ghost")} onClick={()=>{setScalePt1(null);setScalePt2(null);setMode("camera");}}>✕</button>
+      </>}
+      {mode==="wall"&&<><span style={{color:FT.red,fontWeight:700,whiteSpace:"nowrap"}}>🧱 DRAW WALL</span><span style={{color:DM.muted,marginLeft:4,whiteSpace:"nowrap"}}>click start → click end · ESC to exit</span><span style={{marginLeft:8,whiteSpace:"nowrap"}}>Thick:</span><input type="range" min={3} max={24} value={wallThick} onChange={e=>setWallThick(+e.target.value)} style={{width:60,accentColor:FT.red}}/><span style={{width:16}}>{wallThick}</span><label style={{display:"flex",alignItems:"center",gap:3,cursor:"pointer",whiteSpace:"nowrap"}}><input type="checkbox" checked={showSnap} onChange={e=>setShowSnap(e.target.checked)}/> Snap</label>{walls.length>0&&<button style={{...S.btn("ghost"),fontSize:9}} onClick={()=>updWalls(ws=>{ws.length=0;setSelWallId(null);})}>🗑 Walls</button>}</>}
+      {mode==="wall_edit"&&<><span style={{color:"#4488FF",fontWeight:700,whiteSpace:"nowrap"}}>✏️ EDIT WALL</span><span style={{color:DM.muted,marginLeft:4,whiteSpace:"nowrap"}}>click · drag endpoints · DEL</span>{selWallId&&<button style={{...S.btn("blue"),fontSize:9,marginLeft:4}} onClick={()=>delWall(selWallId)}>🗑 Delete</button>}{walls.length>0&&<button style={{...S.btn("ghost"),fontSize:9,marginLeft:4}} onClick={()=>updWalls(ws=>{ws.length=0;setSelWallId(null);})}>🗑 All</button>}</>}
+      {mode==="annotate"&&<><span style={{color:"#B87800",fontWeight:700,whiteSpace:"nowrap"}}>📝 NOTES</span><span style={{color:DM.muted,marginLeft:4,whiteSpace:"nowrap"}}>click to drop · click to edit · ESC</span></>}
+      {mode==="zone"&&<><span style={{color:zoneType==="coverage"?FT.green:FT.red,fontWeight:700,whiteSpace:"nowrap"}}>{zoneType==="coverage"?"✅ COVERAGE":"🚫 EXCLUSION"}</span><span style={{color:DM.muted,marginLeft:4,whiteSpace:"nowrap"}}>{zoneDraft?`${zoneDraft.pts.length} pts — double-click to close`:"click to start"}</span>{zoneDraft&&zoneDraft.pts.length>=3&&<button style={{...S.btn("success"),fontSize:9,marginLeft:4}} onClick={closeZone}>✓ Close</button>}{zoneDraft&&<button style={{...S.btn("ghost"),fontSize:9}} onClick={()=>setZoneDraft(null)}>✕</button>}{zones.length>0&&<button style={{...S.btn("ghost"),fontSize:9}} onClick={()=>{setZoneDraft(null);clearZones();}}>🗑 Zones</button>}<button style={{...S.btn("ghost"),fontSize:9,marginLeft:"auto"}} onClick={()=>{setMode("camera");setZoneDraft(null);}}>✕ Exit</button></>}
+    </div>
   </div>
-
   {/* Floor tabs */}
   <div style={{background:DM.surface,borderBottom:"1px solid "+DM.border,display:"flex",alignItems:"center",gap:0,overflowX:"auto",flexShrink:0}}>
     {activeB?.floors.map(f=>(
@@ -1427,7 +1730,7 @@ export default function App(){
     <button onClick={()=>addFloor(activeBId)} style={{padding:"4px 10px",border:"none",borderRight:"1px solid "+DM.border,background:"transparent",color:FT.green,cursor:"pointer",fontSize:13,flexShrink:0}} title="Add floor">＋</button>
   </div>
 
-  <div style={S.cvRow}>
+  <div ref={canvasWrapRef} style={S.cvRow}>
     {importing&&(
       <div style={{position:"absolute",inset:0,zIndex:99,background:"rgba(26,26,46,0.75)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:14,pointerEvents:"none"}}>
         <style>{`@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}`}</style>
@@ -1530,6 +1833,22 @@ export default function App(){
       zoom={zoom} panX={panX} panY={panY}
       onZoom={handleZoom}
       onPanDelta={handlePanDelta}
+      onWrapSize={s=>{
+        setContainerSize(s);
+        containerSizeRef.current=s; // keep ref current for resetView
+        // Auto-fit when container grows and user hasn't manually zoomed
+        setZoom(z=>{
+          const IW=activeF?.imgW||s.w;
+          const IH=activeF?.imgH||s.h;
+          const fitZ=Math.min(s.w/IW,s.h/IH)*0.97;
+          if(Math.abs(z-1)<0.01||z<fitZ){
+            setPanX(0);
+            setPanY(0);
+            return fitZ;
+          }
+          return z;
+        });
+      }}
     />
 
     {/* ── Side panel ──────────────────────────────────────────────────────── */}
@@ -1782,8 +2101,8 @@ export default function App(){
   </div>
 </div>}
 
-        </div>
       </div>
     </div>
+  </div>
   );
 }
