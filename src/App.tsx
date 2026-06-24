@@ -735,18 +735,18 @@ function FloorCanvas({floor,cameras,annotations,zones,zoneDraft,selCamId,selWall
 
   const onWheel=useCallback(e=>{
     e.preventDefault();
-    if(e.ctrlKey||e.metaKey){
-      // Ctrl+scroll → zoom toward cursor
+    if(e.shiftKey){
+      // Shift+scroll → pan horizontally
+      onPanDelta(-e.deltaY*1.2, 0);
+    } else if(e.ctrlKey||e.metaKey){
+      // Ctrl+scroll → pan vertically
+      onPanDelta(0,-e.deltaY*1.2);
+    } else {
+      // Plain scroll → zoom toward cursor (original behaviour)
       const r=getCanvasRect();
       const cx=(e.clientX-r.left)*(IW/r.width);
       const cy=(e.clientY-r.top)*(IH/r.height);
       onZoom(e.deltaY<0?1.15:1/1.15, cx, cy);
-    } else {
-      // Scroll → pan (Shift = horizontal, default = vertical)
-      const speed=1.2;
-      const dx=e.shiftKey?-e.deltaY*speed:-e.deltaX*speed;
-      const dy=e.shiftKey?0:-e.deltaY*speed;
-      onPanDelta(dx,dy);
     }
   },[IW,IH,onZoom,onPanDelta]);
 
@@ -935,6 +935,18 @@ export default function App(){
   };
 
   // ── Save / Load project (JSON) ────────────────────────────────────────────
+  const newProject=()=>{
+    if(!window.confirm("Start a new project? All unsaved changes will be lost.")) return;
+    const p=defProject();
+    setProject(p);
+    setActiveBId(p.buildings[0].id);
+    setActiveFId(p.buildings[0].floors[0].id);
+    setSelCamId(null); setSelWallId(null); setSelAnnotId(null);
+    setMode("camera"); setWallDraft(null); setZoneDraft(null);
+    setUndoStack([]); setRedoStack([]);
+    resetView();
+  };
+
   const saveProject=()=>{
     const data=JSON.stringify({version:1,project,activeBId,activeFId},null,2);
     const blob=new Blob([data],{type:"application/json"});
@@ -1066,7 +1078,14 @@ export default function App(){
       .cover p{font-size:13px;color:#666;margin-top:16px;}
       .floor-page h2{font-size:15px;color:#DA291C;border-bottom:2px solid #DA291C;padding-bottom:4px;margin-bottom:8px;}
       .floor-page h3{font-size:12px;color:#1A1A2E;margin-bottom:6px;}
-      img.floorplan{width:100%;height:auto;border:1px solid #ddd;border-radius:4px;}
+      img.floorplan{
+        width:100%;height:auto;
+        max-height:140mm; /* fits portrait A4 leaving room for header+table */
+        object-fit:contain;
+        border:1px solid #ddd;border-radius:4px;
+        page-break-inside:avoid;
+      }
+      .floor-page{page-break-inside:avoid;}
       .cam-table{width:100%;border-collapse:collapse;margin-top:8px;font-size:10px;}
       .cam-table th{background:#1A1A2E;color:#fff;padding:4px 6px;text-align:left;}
       .cam-table td{padding:4px 6px;border-bottom:1px solid #eee;}
@@ -1086,7 +1105,7 @@ export default function App(){
       .red{color:#DA291C;} .green{color:#00A651;} .orange{color:#F47920;}
       @media print{
         .page{padding:8mm;}
-        @page{size:A4 landscape;margin:8mm;}
+        @page{size:A4 portrait;margin:8mm;}
       }
     `;
 
@@ -1570,7 +1589,8 @@ export default function App(){
           style={{...S.inp,width:isNarrow?110:150,padding:"2px 7px",fontSize:12,fontWeight:600,background:"rgba(255,255,255,0.1)",color:FT.white,border:"1px solid rgba(255,255,255,0.2)",marginLeft:10}}/>}
         {/* Save / Load */}
         <input type="file" accept=".fcplan,.json" ref={projFileRef} style={{display:"none"}} onChange={loadProject}/>
-        <button style={{...S.btn("ghost"),fontSize:10,padding:"3px 9px",marginLeft:6}} onClick={()=>projFileRef.current.click()}>📂 Load</button>
+        <button style={{...S.btn("ghost"),fontSize:10,padding:"3px 9px",marginLeft:6}} onClick={newProject}>🆕 New</button>
+        <button style={{...S.btn("ghost"),fontSize:10,padding:"3px 9px"}} onClick={()=>projFileRef.current.click()}>📂 Load</button>
         <button style={{...S.btn("ghost"),fontSize:10,padding:"3px 9px"}} onClick={saveProject}>💾 Save</button>
         <div style={S.tabs}>{TABS.map(([k,l])=><button key={k} style={S.tab(tab===k)} onClick={()=>setTab(k)}>{isTiny?l[0]:l}</button>)}</div>
       </div>
