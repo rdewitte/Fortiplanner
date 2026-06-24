@@ -735,11 +735,20 @@ function FloorCanvas({floor,cameras,annotations,zones,zoneDraft,selCamId,selWall
 
   const onWheel=useCallback(e=>{
     e.preventDefault();
-    const r=getCanvasRect();
-    const cx=(e.clientX-r.left)*(IW/r.width);
-    const cy=(e.clientY-r.top)*(IH/r.height);
-    onZoom(e.deltaY<0?1.15:1/1.15, cx, cy);
-  },[IW,IH,onZoom]);
+    if(e.ctrlKey||e.metaKey){
+      // Ctrl+scroll → zoom toward cursor
+      const r=getCanvasRect();
+      const cx=(e.clientX-r.left)*(IW/r.width);
+      const cy=(e.clientY-r.top)*(IH/r.height);
+      onZoom(e.deltaY<0?1.15:1/1.15, cx, cy);
+    } else {
+      // Scroll → pan (Shift = horizontal, default = vertical)
+      const speed=1.2;
+      const dx=e.shiftKey?-e.deltaY*speed:-e.deltaX*speed;
+      const dy=e.shiftKey?0:-e.deltaY*speed;
+      onPanDelta(dx,dy);
+    }
+  },[IW,IH,onZoom,onPanDelta]);
 
   const getCursor=()=>{
     const m=modeRef.current;
@@ -751,14 +760,10 @@ function FloorCanvas({floor,cameras,annotations,zones,zoneDraft,selCamId,selWall
   };
 
   return(
-    <div ref={wrapRef} style={{flex:1,minWidth:0,overflow:"hidden",background:"#1e2333",position:"relative",display:"flex",alignItems:"flex-start",justifyContent:"flex-start"}}>
+    <div ref={wrapRef} style={{flex:1,minWidth:0,overflow:"hidden",background:"#1e2333",position:"relative"}}>
       <canvas ref={cvRef} width={IW} height={IH}
         style={{
-          display:"block",
-          // Maintain aspect ratio: scale to fit container without distortion
-          maxWidth:"100%", maxHeight:"100%",
-          width:"auto", height:"auto",
-          objectFit:"contain",
+          display:"block", width:"100%", height:"100%",
           cursor:getCursor()
         }}
         onMouseDown={onDown} onMouseMove={onMove} onMouseUp={onUp} onMouseLeave={onUp}
@@ -879,7 +884,6 @@ export default function App(){
   const containerSizeRef=useRef({w:900,h:550}); // always current, no stale closure
 
   const resetView=()=>{
-    // Read directly from the DOM — most accurate, no stale closure possible
     const el=canvasWrapRef.current;
     const rect=el?el.getBoundingClientRect():null;
     const cw=rect&&rect.width>10?rect.width:containerSizeRef.current.w;
@@ -887,10 +891,8 @@ export default function App(){
     const IW=activeF?.imgW||cw;
     const IH=activeF?.imgH||ch;
     if(cw<=0||ch<=0){setZoom(1);setPanX(0);setPanY(0);return;}
-    // Scale from CSS pixels to canvas pixels
-    // The canvas inside FloorCanvas has pixel size IW×IH drawn at CSS width/height of cw×ch
-    // So 1 canvas-px = cw/IW CSS-px → zoom = cw/IW fills width, ch/IH fills height
-    const fitZoom=Math.min(cw/IW, ch/IH)*0.97;
+    // Fill container completely — min picks the axis that fits without clipping
+    const fitZoom=Math.min(cw/IW, ch/IH);
     setZoom(fitZoom);
     setPanX(0);
     setPanY(0);
@@ -1844,7 +1846,7 @@ export default function App(){
         setZoom(z=>{
           const IW=activeF?.imgW||s.w;
           const IH=activeF?.imgH||s.h;
-          const fitZ=Math.min(s.w/IW,s.h/IH)*0.97;
+          const fitZ=Math.min(s.w/IW,s.h/IH);
           if(Math.abs(z-1)<0.01||z<fitZ){
             setPanX(0);
             setPanY(0);
