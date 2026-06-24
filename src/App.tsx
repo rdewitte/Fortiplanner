@@ -244,16 +244,17 @@ function FloorCanvas({floor,cameras,annotations,zones,zoneDraft,selCamId,selWall
   },[floor.img]);
 
   // ── Core coordinate conversion ────────────────────────────────────────────
-  const getCanvasRect=()=>wrapRef.current?.getBoundingClientRect()||{left:0,top:0,width:IW,height:IH};
+  const getCanvasRect=()=>cvRef.current?.getBoundingClientRect()||{left:0,top:0,width:IW,height:IH};
 
-  // Event → image coords — subtract wrapper origin, then unapply zoom+pan
+  // Event → image coords — accounts for CSS scaling of canvas element
   const evToImg=useCallback(e=>{
     const r=getCanvasRect();
     const cx=e.clientX-r.left;
     const cy=e.clientY-r.top;
-    // CSS transform: canvas is at (panX,panY) scaled by zoom
-    // So image coord = (mouse - pan) / zoom
-    return{x:(cx-panXRef.current)/zoomRef.current, y:(cy-panYRef.current)/zoomRef.current};
+    // Canvas CSS size vs pixel size ratio (handles zoom/pan within canvas coordinate space)
+    const sx=cx*(IW/r.width);
+    const sy=cy*(IH/r.height);
+    return{x:(sx-panXRef.current)/zoomRef.current, y:(sy-panYRef.current)/zoomRef.current};
   },[IW,IH]); // stable — reads zoom/pan from refs
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -735,8 +736,8 @@ function FloorCanvas({floor,cameras,annotations,zones,zoneDraft,selCamId,selWall
   const onWheel=useCallback(e=>{
     e.preventDefault();
     const r=getCanvasRect();
-    const cx=e.clientX-r.left;
-    const cy=e.clientY-r.top;
+    const cx=(e.clientX-r.left)*(IW/r.width);
+    const cy=(e.clientY-r.top)*(IH/r.height);
     onZoom(e.deltaY<0?1.15:1/1.15, cx, cy);
   },[IW,IH,onZoom]);
 
@@ -750,15 +751,14 @@ function FloorCanvas({floor,cameras,annotations,zones,zoneDraft,selCamId,selWall
   };
 
   return(
-    <div ref={wrapRef} style={{flex:1,minWidth:0,overflow:"hidden",background:"#1e2333",position:"relative"}}>
+    <div ref={wrapRef} style={{flex:1,minWidth:0,overflow:"hidden",background:"#1e2333",position:"relative",display:"flex",alignItems:"flex-start",justifyContent:"flex-start"}}>
       <canvas ref={cvRef} width={IW} height={IH}
         style={{
           display:"block",
-          position:"absolute",
-          top:0, left:0,
-          width:IW+"px", height:IH+"px",
-          transformOrigin:"0 0",
-          transform:`translate(${panX}px,${panY}px) scale(${zoom})`,
+          // Maintain aspect ratio: scale to fit container without distortion
+          maxWidth:"100%", maxHeight:"100%",
+          width:"auto", height:"auto",
+          objectFit:"contain",
           cursor:getCursor()
         }}
         onMouseDown={onDown} onMouseMove={onMove} onMouseUp={onUp} onMouseLeave={onUp}
