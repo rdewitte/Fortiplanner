@@ -1255,9 +1255,17 @@ export default function App(){
       <tbody><tr><td class="sku">${recRow.sku}</td><td>${recRow.name}</td><td>${recRow.form}</td><td>${recRow.hdd}</td><td style="text-align:right" class="qty">×1</td></tr></tbody>
       </table>`:""}
 
-      ${accRows.length>0?`<h3>Accessories &amp; Licensing</h3>
+      ${(cloudCamCount>0||accRows.length>0)?`<h3>Accessories &amp; Licensing</h3>
       <table class="bom-table"><thead><tr><th>SKU</th><th>Description</th><th>Category</th><th style="text-align:right">Qty</th></tr></thead>
-      <tbody>${accRows.map(a=>`<tr><td class="sku">${a.sku}</td><td>${a.name}</td><td>${a.cat}</td><td style="text-align:right" class="qty">×${bomAcc[a.sku]}</td></tr>`).join("")}</tbody>
+      <tbody>
+        ${cloudCamCount>0?`<tr>
+          <td class="sku">${licSku}</td>
+          <td>${licenseYears}-Year FortiCamera Cloud + FortiCare Premium (per camera)</td>
+          <td>License</td>
+          <td style="text-align:right" class="qty">×${cloudCamCount}</td>
+        </tr>`:""}
+        ${accRows.map(a=>`<tr><td class="sku">${a.sku}</td><td>${a.name}</td><td>${a.cat}</td><td style="text-align:right" class="qty">×${bomAcc[a.sku]}</td></tr>`).join("")}
+      </tbody>
       </table>`:""}
 
       ${project.buildings.map(b=>`
