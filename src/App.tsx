@@ -775,7 +775,7 @@ function FloorCanvas({floor,cameras,annotations,zones,zoneDraft,selCamId,selWall
     <div ref={wrapRef} style={{flex:1,minWidth:0,overflow:"hidden",background:"#1e2333",position:"relative"}}>
       <canvas ref={cvRef} width={IW} height={IH}
         style={{
-          display:"block", width:"100%", height:"100%",
+          display:"block", width:"100%", height:"auto", maxHeight:"100%",
           cursor:getCursor()
         }}
         onMouseDown={onDown} onMouseMove={onMove} onMouseUp={onUp} onMouseLeave={onUp}
