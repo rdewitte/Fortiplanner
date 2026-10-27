@@ -1102,9 +1102,8 @@ export default function App(){
     const CSS=`
       *{box-sizing:border-box;margin:0;padding:0;}
       body{font-family:'Segoe UI',Arial,sans-serif;color:#1A1A2E;background:#fff;}
-      .page{page-break-after:always;padding:12mm;}
-      .page:last-child{page-break-after:avoid;}
-      .cover{display:flex;flex-direction:column;justify-content:center;align-items:center;min-height:100vh;}
+      .page{padding:12mm;}
+      .cover{display:flex;flex-direction:column;align-items:center;padding-top:40mm;gap:8px;}
       .cover h1{font-size:32px;color:#DA291C;margin-bottom:8px;}
       .cover h2{font-size:18px;color:#1A1A2E;font-weight:400;margin-bottom:4px;}
       .cover p{font-size:13px;color:#666;margin-top:16px;}
@@ -1169,7 +1168,7 @@ export default function App(){
       <style>${CSS}</style></head><body>`;
 
     // Cover page
-    html+=`<div class="page cover">
+    html+=`<div class="page cover" style="page-break-after:always">
       <img src="data:image/png;base64,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" style="width:80px;height:80px;object-fit:contain"/>
       <h1>FortiCamera Planner</h1>
       <h2>${project.name}</h2>
@@ -1193,7 +1192,7 @@ export default function App(){
       const fCounts={};
       fCams.forEach(c=>{fCounts[c.model]=(fCounts[c.model]||0)+1;});
 
-      html+=`<div class="page floor-page">
+      html+=`<div class="page floor-page" style="page-break-after:always">
         <h2>🏢 ${b.name} — ${f.name}</h2>
         <div style="display:flex;gap:8px;font-size:10px;color:#666;margin-bottom:8px;">
           <span>📷 ${fCams.length} cameras</span>
