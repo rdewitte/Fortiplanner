@@ -861,6 +861,7 @@ export default function App(){
   const [qDist,setQDist]=useState(10);
   const [qCond,setQCond]=useState("day");
   const [bomAcc,setBomAcc]=useState({});
+  const [licenseYears,setLicenseYears]=useState(1);
   const [selRec,setSelRec]=useState("");
   const fileRef=useRef(null);
   const projFileRef=useRef(null);
@@ -1595,10 +1596,17 @@ export default function App(){
   const allCams=project.buildings.flatMap(b=>b.floors.flatMap(f=>f.cameras.map(c=>({...c,bName:b.name,bId:b.id,fName:f.name,fId:f.id}))));
   const totalPoe=allCams.reduce((s,c)=>{const d=CAMERA_DB.find(x=>x.model===c.model);return s+(d?d.poeBudget:0);},0);
 
+  const cloudCamCount=allCams.filter(c=>{const d=CAMERA_DB.find(x=>x.model===c.model);return d&&d.cloudOnly;}).length;
+  // Cloud license SKU suffix: -12=1yr, -36=3yr, -60=5yr (DD is the generic token)
+  const licSkuMap={1:"FC1-10-FCCLD-518-02-12",3:"FC1-10-FCCLD-518-02-36",5:"FC1-10-FCCLD-518-02-60"};
+  const licSku=licSkuMap[licenseYears]||"FC1-10-FCCLD-518-02-12";
+  const licDesc=`FortiCamera Cloud + FortiCare (${licenseYears}yr/cam)`;
+
   const bomLines=()=>{
     const counts={};allCams.forEach(c=>{counts[c.model]=(counts[c.model]||0)+1;});
     const lines=Object.entries(counts).map(([m,q])=>{const d=CAMERA_DB.find(x=>x.model===m);return{sku:d.sku,desc:d.name,qty:q,cat:"Camera"};});
     if(selRec){const r=RECORDER_DB.find(r=>r.sku===selRec);if(r)lines.push({sku:r.sku,desc:r.name,qty:1,cat:"Recorder"});}
+    if(cloudCamCount>0)lines.push({sku:licSku,desc:licDesc,qty:cloudCamCount,cat:"License"});
     ACCESSORIES_DB.forEach(a=>{const q=bomAcc[a.sku]||0;if(q>0)lines.push({sku:a.sku,desc:a.name,qty:q,cat:"Accessory"});});
     return lines;
   };
@@ -2223,6 +2231,20 @@ export default function App(){
       </div>
       <div style={S.pan}>
         <div style={S.st}>🔩 Accessories &amp; Licensing</div>
+        {cloudCamCount>0&&<div style={{padding:"6px 0 8px",borderBottom:"1px solid "+FT.gray,marginBottom:8}}>
+          <div style={{fontSize:10,fontWeight:700,color:FT.navy,marginBottom:4}}>☁ FortiCamera Cloud License</div>
+          <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+            <div style={{fontSize:10,color:FT.textSub}}><b style={{color:FT.red}}>{cloudCamCount}</b> cloud camera{cloudCamCount!==1?"s":""} detected</div>
+            <div style={{display:"flex",alignItems:"center",gap:4}}>
+              <span style={{fontSize:10,color:FT.textSub}}>Subscription:</span>
+              {[1,3,5].map(y=><button key={y} onClick={()=>setLicenseYears(y)}
+                style={{padding:"2px 10px",fontSize:10,fontWeight:700,borderRadius:3,border:"1px solid "+(licenseYears===y?FT.red:FT.gray),
+                  background:licenseYears===y?FT.red:FT.white,color:licenseYears===y?FT.white:FT.grayDark,cursor:"pointer"}}>
+                {y}yr</button>)}
+            </div>
+          </div>
+          <div style={{fontSize:9,color:FT.grayMid,marginTop:3}}>{licSku}</div>
+        </div>}
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:4}}>
           {ACCESSORIES_DB.map(a=>(
             <div key={a.sku} style={{display:"flex",alignItems:"center",gap:4,padding:"4px 6px",background:FT.offWhite,borderRadius:4,border:"1px solid "+FT.gray}}>
