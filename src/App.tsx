@@ -33,6 +33,8 @@ const CAMERA_DB = [
     faceQ:{day:{"2":100,"5":92,"8":75,"12":52,"20":25},night:{"2":82,"5":68,"8":48,"12":28,"20":10}}, lprQ:{day:{"5":90,"10":72,"15":48,"20":28,"30":10},night:{"5":75,"10":55,"15":32,"20":15,"30":5}} },
   { model:"FCM-FE120B",  sku:"FCM-FE120B",  name:"FortiCamera FE120B",  cloudOnly:false, type:"Fisheye",                 resolution:"12MP/9MP",fov:360, irRange:20, poeStd:"802.3at", poeBudget:22, color:FT.grayDark, desc:"12MP fisheye, 1.22mm, IP66/IK10",
     faceQ:{day:{"2":95,"4":78,"6":58,"8":38,"10":20},night:{"2":75,"4":55,"6":35,"8":18,"10":8}}, lprQ:{day:{"2":85,"4":65,"6":45,"8":25,"10":10},night:{"2":65,"4":45,"6":25,"8":10,"10":3}} },
+  { model:"FCM-FE120B-CA", sku:"FCM-FE120B-CA", name:"FortiCamera FE120B-CA", cloudOnly:true, type:"AI Fisheye",             resolution:"12MP",    fov:360, irRange:20, poeStd:"802.3at", poeBudget:22, color:FT.red, desc:"12MP AI fisheye, 1.22mm, built-in analytics, IP66/IK10, 1TB SD",
+    faceQ:{day:{"2":98,"4":85,"6":68,"8":48,"10":28},night:{"2":82,"4":65,"6":45,"8":25,"10":12}}, lprQ:{day:{"2":90,"4":72,"6":52,"8":32,"10":15},night:{"2":72,"4":52,"6":32,"8":15,"10":5}} },
 ];
 
 const RECORDER_DB = [
@@ -83,7 +85,7 @@ const defFloor=()=>({id:makeId(),name:"Floor 1",img:null,imgW:0,imgH:0,pxPerFt:n
 const defOutdoorZone=()=>({id:makeId(),name:"Outdoor Zone 1",type:"outdoor",
   lat:null,lng:null,zoom:18,img:null,imgW:800,imgH:600,pxPerMeter:null,cameras:[],walls:[]});
 const defProject=()=>({name:"New Project",customer:"",buildings:[{id:makeId(),name:"Building A",floors:[defFloor()],outdoorZones:[]}]});
-const MAPBOX_TOKEN="pk.eyJ1IjoicmRld2l0dGU2NSIsImEiOiJjbXFzZGNxZ2wwMmRkMnBwbDk0Mndmb2p5In0.R_j9OJnOgFPgNkGYHd89WQ";
+const MAPBOX_TOKEN=import.meta.env.VITE_MAPBOX_TOKEN||"";
 const getMapboxUrl=(lat,lng,zoom,w=800,h=600)=>
   'https://api.mapbox.com/styles/v1/mapbox/satellite-streets-v12/static/'+
   lng+','+lat+','+zoom+',0/'+w+'x'+h+'?attribution=false&logo=false&access_token='+MAPBOX_TOKEN;
