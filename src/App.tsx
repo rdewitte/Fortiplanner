@@ -878,6 +878,7 @@ export default function App(){
   const [bomAcc,setBomAcc]=useState({});
   const [licenseYears,setLicenseYears]=useState(1);
   const [selRec,setSelRec]=useState("");
+  const [deployMode,setDeployMode]=useState("cloud"); // "cloud"|"onprem"|"hybrid"
   // Sizing tab state
   const [sizMode,setSizMode]=useState("cloud"); // "cloud" | "onprem"
   const [sizCodec,setSizCodec]=useState("H.265");
@@ -1626,16 +1627,59 @@ export default function App(){
   const totalPoe=allCams.reduce((s,c)=>{const d=CAMERA_DB.find(x=>x.model===c.model);return s+(d?d.poeBudget:0);},0);
 
   const cloudCamCount=allCams.filter(c=>{const d=CAMERA_DB.find(x=>x.model===c.model);return d&&d.cloudOnly;}).length;
-  // Cloud license SKU suffix: -12=1yr, -36=3yr, -60=5yr (DD is the generic token)
+  const onpremCamCount=allCams.length-cloudCamCount;
+  // Cloud license SKU suffix: -12=1yr, -36=3yr, -60=5yr
   const licSkuMap={1:"FC1-10-FCCLD-518-02-12",3:"FC1-10-FCCLD-518-02-36",5:"FC1-10-FCCLD-518-02-60"};
   const licSku=licSkuMap[licenseYears]||"FC1-10-FCCLD-518-02-12";
   const licDesc=`FortiCamera Cloud + FortiCare (${licenseYears}yr/cam)`;
 
+  // VM stackable license calculator — returns array of {sku,desc,qty} to reach camCount
+  const vmStackLines=(camCount)=>{
+    // Base includes 10 cams; add stacking licenses to cover the rest
+    const needed=Math.max(0,camCount-10);
+    const stacks=[];
+    let rem=needed;
+    if(rem>=100){stacks.push({sku:"FRC-VM-100",desc:"FortiRecorder VM — 100 additional cameras",qty:Math.floor(rem/100),cat:"Recorder"});rem=rem%100;}
+    if(rem>=50){stacks.push({sku:"FRC-VM-50",desc:"FortiRecorder VM — 50 additional cameras",qty:Math.floor(rem/50),cat:"Recorder"});rem=rem%50;}
+    if(rem>0){stacks.push({sku:"FRC-VM-10",desc:"FortiRecorder VM — 10 additional cameras",qty:Math.ceil(rem/10),cat:"Recorder"});}
+    return stacks;
+  };
+
   const bomLines=()=>{
     const counts={};allCams.forEach(c=>{counts[c.model]=(counts[c.model]||0)+1;});
     const lines=Object.entries(counts).map(([m,q])=>{const d=CAMERA_DB.find(x=>x.model===m);return{sku:d.sku,desc:d.name,qty:q,cat:"Camera"};});
-    if(selRec){const r=RECORDER_DB.find(r=>r.sku===selRec);if(r)lines.push({sku:r.sku,desc:r.name,qty:1,cat:"Recorder"});}
-    if(cloudCamCount>0)lines.push({sku:licSku,desc:licDesc,qty:cloudCamCount,cat:"License"});
+
+    if(deployMode==="cloud"){
+      // Pure cloud: license for every cloud-capable camera placed
+      if(cloudCamCount>0)lines.push({sku:licSku,desc:licDesc,qty:cloudCamCount,cat:"License"});
+    }
+    else if(deployMode==="onprem"){
+      // Pure on-prem: FortiRecorder + VM stacking if needed, no cloud licenses
+      if(selRec){
+        const r=RECORDER_DB.find(r=>r.sku===selRec);
+        if(r){
+          lines.push({sku:r.sku,desc:r.name,qty:1,cat:"Recorder"});
+          if(r.sku==="FRC-VM-BASE")vmStackLines(allCams.length).forEach(l=>lines.push(l));
+        }
+      }
+    }
+    else if(deployMode==="hybrid"){
+      // Hybrid: FortiRecorder (on-prem) + cloud management of all cameras
+      // 1. FortiRecorder appliance or VM base
+      if(selRec){
+        const r=RECORDER_DB.find(r=>r.sku===selRec);
+        if(r){
+          lines.push({sku:r.sku,desc:r.name,qty:1,cat:"Recorder"});
+          if(r.sku==="FRC-VM-BASE")vmStackLines(allCams.length).forEach(l=>lines.push(l));
+        }
+      }
+      // 2. FRC-CLM-20: cloud management of FortiRecorder cameras (stackable 20-cam blocks, perpetual)
+      const clmBlocks=Math.ceil(allCams.length/20);
+      if(clmBlocks>0)lines.push({sku:"FRC-CLM-20",desc:"FortiRecorder Cloud Mode — 20 cameras (perpetual, stackable)",qty:clmBlocks,cat:"License"});
+      // 3. FortiCamera Cloud subscription for cloud analytics per camera
+      if(allCams.length>0)lines.push({sku:licSku,desc:licDesc,qty:allCams.length,cat:"License"});
+    }
+
     ACCESSORIES_DB.forEach(a=>{const q=bomAcc[a.sku]||0;if(q>0)lines.push({sku:a.sku,desc:a.name,qty:q,cat:"Accessory"});});
     return lines;
   };
@@ -2473,7 +2517,7 @@ export default function App(){
 
 {tab==="bom"&&<div style={{flex:1,overflow:"auto",padding:12}}>
   <div style={S.panR}><div style={{fontSize:14,fontWeight:800,color:FT.navy,marginBottom:2}}>Bill of Materials &amp; Quote</div>
-    <div style={{fontSize:11,color:FT.textSub}}>{project.buildings.length} building(s) · {allCams.length} cameras · {totalPoe}W PoE</div></div>
+    <div style={{fontSize:11,color:FT.textSub}}>{project.buildings.length} building(s) · {allCams.length} cameras · {totalPoe}W PoE · {deployMode==="cloud"?"☁ Cloud Only":deployMode==="onprem"?"🖥 On-Prem Only":"⚡ Hybrid"}</div></div>
   <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:7,marginBottom:10}}>
     <div style={S.pan}><div style={S.lbl}>Project</div><input style={S.inp} value={project.name} onChange={e=>updProject(np=>np.name=e.target.value)}/></div>
     <div style={S.pan}><div style={S.lbl}>Customer</div><input style={S.inp} value={project.customer||""} onChange={e=>updProject(np=>np.customer=e.target.value)} placeholder="Company"/></div>
@@ -2505,36 +2549,93 @@ export default function App(){
           {!b.floors.some(f=>f.cameras.length>0)&&<div style={{fontSize:10,color:FT.grayMid}}>No cameras placed.</div>}
         </div>
       ))}
+      {/* ── Deployment Mode ──────────────────────────── */}
       <div style={S.pan}>
-        <div style={S.st}>🖥 FortiRecorder (On-Prem)</div>
+        <div style={S.st}>🌐 Deployment Mode</div>
+        <div style={{display:"flex",gap:4,marginBottom:10}}>
+          {[["cloud","☁ Cloud Only","All cameras managed via FortiCamera Cloud. No on-prem NVR."],
+            ["onprem","🖥 On-Prem Only","FortiRecorder NVR locally. No cloud connectivity."],
+            ["hybrid","⚡ Hybrid","FortiRecorder on-prem + cloud management & analytics for all cameras."]
+          ].map(([val,label,tip])=>(
+            <button key={val} title={tip} onClick={()=>setDeployMode(val)} style={{
+              flex:1,padding:"7px 4px",fontSize:10,fontWeight:700,borderRadius:4,cursor:"pointer",
+              border:"2px solid "+(deployMode===val?FT.green:FT.gray),
+              background:deployMode===val?FT.green:FT.white,
+              color:deployMode===val?FT.white:FT.grayDark,
+              transition:"all .15s"
+            }}>{label}</button>
+          ))}
+        </div>
+        {deployMode==="cloud"&&<div style={{fontSize:10,color:FT.textSub,lineHeight:1.6,padding:"6px 8px",background:FT.offWhite,borderRadius:4}}>
+          All cameras connect directly to FortiCamera Cloud. Requires cloud-capable SKUs (marked ☁). License required per camera.
+        </div>}
+        {deployMode==="onprem"&&<div style={{fontSize:10,color:FT.textSub,lineHeight:1.6,padding:"6px 8px",background:FT.offWhite,borderRadius:4}}>
+          All cameras record locally to a FortiRecorder NVR. FortiCamera, 3rd-party ONVIF, and legacy cameras all supported. No cloud connectivity or licenses required.
+        </div>}
+        {deployMode==="hybrid"&&<div style={{fontSize:10,color:FT.textSub,lineHeight:1.6,padding:"6px 8px",background:"#EAF7EE",borderRadius:4,borderLeft:"3px solid "+FT.green}}>
+          <b style={{color:FT.green}}>Hybrid mode:</b> FortiRecorder stores footage on-prem. All cameras (FortiCamera, 3rd-party, legacy) are also managed and their analytics accessed via FortiCamera Cloud.<br/>
+          Requires: <b>FRC-CLM-20</b> (cloud management of FortiRecorder, 20-cam blocks) + <b>FC1-10-FCCLD</b> subscription per camera for cloud analytics.
+        </div>}
+      </div>
+
+      {/* ── FortiRecorder (on-prem or hybrid) ───────── */}
+      {(deployMode==="onprem"||deployMode==="hybrid")&&<div style={S.pan}>
+        <div style={S.st}>🖥 FortiRecorder</div>
         <select style={S.sel} value={selRec} onChange={e=>setSelRec(e.target.value)}>
-          <option value="">— FortiCamera Cloud only (no NVR) —</option>
+          <option value="">— Select a FortiRecorder model —</option>
           {RECORDER_DB.map(r=><option key={r.sku} value={r.sku}>{r.sku} — {r.name}</option>)}
         </select>
-        {selRec&&(()=>{const rec=RECORDER_DB.find(r=>r.sku===selRec);if(!rec)return null;
+        {selRec&&(()=>{
+          const rec=RECORDER_DB.find(r=>r.sku===selRec);if(!rec)return null;
           const over=rec.sku!=="FRC-VM-BASE"&&allCams.length>rec.channels;
+          const vmStacks=rec.sku==="FRC-VM-BASE"?vmStackLines(allCams.length):[];
           return<div style={{marginTop:6,padding:7,background:FT.offWhite,borderRadius:4,fontSize:10,lineHeight:1.7}}>
-            <div style={{fontWeight:700}}>{rec.name}</div><div style={{color:FT.textSub}}>{rec.desc}</div>
+            <div style={{fontWeight:700}}>{rec.name}</div>
+            <div style={{color:FT.textSub}}>{rec.desc}</div>
             <div style={{color:FT.textSub}}>{rec.form} · {rec.hdd}</div>
-            {over&&<div style={{color:FT.red,fontWeight:600}}>⚠ {allCams.length} cams exceed {rec.channels}ch.</div>}
+            {over&&<div style={{color:FT.red,fontWeight:600}}>⚠ {allCams.length} cameras exceed {rec.channels}ch limit.</div>}
+            {vmStacks.length>0&&<div style={{marginTop:5,padding:"4px 6px",background:"#EAF7EE",borderRadius:3,borderLeft:"3px solid "+FT.green}}>
+              <div style={{fontWeight:700,color:FT.green,marginBottom:2}}>VM Stacking licenses needed ({allCams.length} cameras, base covers 10):</div>
+              {vmStacks.map(s=><div key={s.sku} style={{color:FT.navy}}>× {s.qty} &nbsp;<b>{s.sku}</b> — {s.desc}</div>)}
+            </div>}
           </div>;
         })()}
-      </div>
+        {!selRec&&<div style={{fontSize:10,color:FT.red,marginTop:5}}>⚠ Please select a FortiRecorder model.</div>}
+      </div>}
+
+      {/* ── Licensing ────────────────────────────────── */}
       <div style={S.pan}>
-        <div style={S.st}>🔩 Accessories &amp; Licensing</div>
-        {cloudCamCount>0&&<div style={{padding:"6px 0 8px",borderBottom:"1px solid "+FT.gray,marginBottom:8}}>
-          <div style={{fontSize:10,fontWeight:700,color:FT.navy,marginBottom:4}}>☁ FortiCamera Cloud License</div>
-          <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-            <div style={{fontSize:10,color:FT.textSub}}><b style={{color:FT.red}}>{cloudCamCount}</b> cloud camera{cloudCamCount!==1?"s":""} detected</div>
+        <div style={S.st}>🔩 Licensing &amp; Accessories</div>
+        {/* Cloud license subscription term */}
+        {(deployMode==="cloud"||deployMode==="hybrid")&&<div style={{padding:"6px 0 10px",borderBottom:"1px solid "+FT.gray,marginBottom:8}}>
+          <div style={{fontSize:10,fontWeight:700,color:FT.navy,marginBottom:4}}>
+            {deployMode==="hybrid"?"☁ Cloud Analytics Subscription (all cameras)":"☁ FortiCamera Cloud License"}
+          </div>
+          <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",marginBottom:4}}>
+            <div style={{fontSize:10,color:FT.textSub}}>
+              <b style={{color:FT.red}}>{deployMode==="hybrid"?allCams.length:cloudCamCount}</b> camera{(deployMode==="hybrid"?allCams.length:cloudCamCount)!==1?"s":""}
+              {deployMode==="hybrid"?" (all — FortiCamera + 3rd-party)":" detected"}
+            </div>
             <div style={{display:"flex",alignItems:"center",gap:4}}>
-              <span style={{fontSize:10,color:FT.textSub}}>Subscription:</span>
+              <span style={{fontSize:10,color:FT.textSub}}>Term:</span>
               {[1,3,5].map(y=><button key={y} onClick={()=>setLicenseYears(y)}
-                style={{padding:"2px 10px",fontSize:10,fontWeight:700,borderRadius:3,border:"1px solid "+(licenseYears===y?FT.red:FT.gray),
-                  background:licenseYears===y?FT.red:FT.white,color:licenseYears===y?FT.white:FT.grayDark,cursor:"pointer"}}>
+                style={{padding:"2px 10px",fontSize:10,fontWeight:700,borderRadius:3,cursor:"pointer",
+                  border:"1px solid "+(licenseYears===y?FT.red:FT.gray),
+                  background:licenseYears===y?FT.red:FT.white,
+                  color:licenseYears===y?FT.white:FT.grayDark}}>
                 {y}yr</button>)}
             </div>
           </div>
-          <div style={{fontSize:9,color:FT.grayMid,marginTop:3}}>{licSku}</div>
+          <div style={{fontSize:9,color:FT.grayMid}}>{licSku} × {deployMode==="hybrid"?allCams.length:cloudCamCount}</div>
+          {deployMode==="hybrid"&&allCams.length>0&&(()=>{
+            const blocks=Math.ceil(allCams.length/20);
+            return<div style={{marginTop:6,padding:"4px 6px",background:"#EAF7EE",borderRadius:3,borderLeft:"3px solid "+FT.green,fontSize:9,color:FT.navy}}>
+              <b>FRC-CLM-20</b> × {blocks} — FortiRecorder Cloud Mode, {blocks*20}-camera block{blocks>1?"s":""} (perpetual)
+            </div>;
+          })()}
+        </div>}
+        {deployMode==="onprem"&&<div style={{padding:"6px 0 10px",borderBottom:"1px solid "+FT.gray,marginBottom:8,fontSize:10,color:FT.textSub}}>
+          ✅ No cloud licenses required for on-prem only deployment.
         </div>}
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:4}}>
           {ACCESSORIES_DB.map(a=>(
@@ -2561,7 +2662,7 @@ export default function App(){
       </div>
       <div style={S.pan}>
         <div style={S.st}>Project Summary</div>
-        {[["Project",project.name||"—"],["Customer",project.customer||"—"],["Buildings",project.buildings.length],["Cameras",allCams.length],["PoE",totalPoe+"W"],["NVR",selRec?RECORDER_DB.find(r=>r.sku===selRec)?.name||"Cloud":"Cloud"],["Date",new Date().toLocaleDateString()]].map(([k,v])=>(
+        {[["Project",project.name||"—"],["Customer",project.customer||"—"],["Buildings",project.buildings.length],["Cameras",allCams.length],["PoE",totalPoe+"W"],["Mode",deployMode==="cloud"?"☁ Cloud Only":deployMode==="onprem"?"🖥 On-Prem Only":"⚡ Hybrid"],["NVR",(deployMode==="onprem"||deployMode==="hybrid")?(selRec?RECORDER_DB.find(r=>r.sku===selRec)?.name||selRec:"— not selected —"):"N/A (Cloud)"],["Date",new Date().toLocaleDateString()]].map(([k,v])=>(
           <div key={k} style={{display:"flex",justifyContent:"space-between",padding:"4px 0",borderBottom:"1px solid "+FT.gray,fontSize:11}}>
             <span style={{color:FT.textSub}}>{k}</span><span style={{fontWeight:600,color:FT.navy}}>{v}</span>
           </div>
@@ -2595,9 +2696,10 @@ export default function App(){
           ["Project",project.name||"—"],
           ["Customer",project.customer||"—"],
           ["Date",new Date().toLocaleDateString()],
-          ["Cameras",`${allCams.length} total · ${cloudCamCount} cloud · ${allCams.length-cloudCamCount} on-prem`],
+          ["Deployment",deployMode==="cloud"?"Cloud Only":deployMode==="onprem"?"On-Prem Only":"Hybrid (On-Prem + Cloud)"],
+          ["Cameras",`${allCams.length} total · ${cloudCamCount} cloud-native · ${onpremCamCount} on-prem/3rd-party`],
           ["Total PoE",`${totalPoe} W`],
-          ["NVR",selRec?(RECORDER_DB.find(r=>r.sku===selRec)?.name||selRec):"FortiCamera Cloud (no NVR)"],
+          ["NVR",(deployMode==="onprem"||deployMode==="hybrid")?(selRec?RECORDER_DB.find(r=>r.sku===selRec)?.name||selRec:"— not selected —"):"FortiCamera Cloud (no NVR)"],
         ];
         const s1rows=[
           tr(td("FORTINET — BILL OF MATERIALS",{bg:C.navy,fg:C.white,bold:true,align:"center",sz:13,colspan:4})),
