@@ -2674,7 +2674,7 @@ export default function App(){
         a.download="BOM_"+project.name.replace(/\s+/g,"_")+".xls";
         a.click();
       }}>📊 Export BOM (.xls)</button>
-      <button style={{...S.btn("red"),width:"100%",padding:"8px",fontSize:12,marginTop:4}} onClick={exportPDF}>🖨 Export PDF (all floors + BOM)</button>
+      <button style={{...S.btn("green"),width:"100%",padding:"8px",fontSize:12,marginTop:4}} onClick={exportPDF}>🖨 Export PDF (all floors + BOM)</button>
     </div>
   </div>
 </div>}
