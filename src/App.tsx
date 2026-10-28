@@ -2685,8 +2685,10 @@ export default function App(){
         XLSX.utils.book_append_sheet(wb,ws2,"Camera Detail");
 
         // ── Write & trigger download ──────────────────────────────────────
-        const buf=XLSX.write(wb,{bookType:"xlsx",type:"array",cellStyles:true});
-        const blob=new Blob([buf],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+        const binaryStr=XLSX.write(wb,{bookType:"xlsx",type:"binary",cellStyles:true});
+        const u8=new Uint8Array(binaryStr.length);
+        for(let i=0;i<binaryStr.length;i++)u8[i]=binaryStr.charCodeAt(i)&0xFF;
+        const blob=new Blob([u8],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
         const a=document.createElement("a");
         a.href=URL.createObjectURL(blob);
         a.download="BOM_"+project.name.replace(/\s+/g,"_")+".xlsx";
