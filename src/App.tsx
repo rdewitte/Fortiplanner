@@ -1920,8 +1920,137 @@ export default function App(){
     })}
     <button onClick={()=>addFloor(activeBId)} style={{padding:"4px 10px",border:"none",borderRight:"1px solid "+DM.border,background:"transparent",color:FT.green,cursor:"pointer",fontSize:13,flexShrink:0}} title="Add floor">＋</button>
     <button onClick={()=>setShowMapSearch(true)} style={{padding:"4px 10px",border:"none",borderRight:"1px solid "+DM.border,background:"transparent",color:"#00A651",cursor:"pointer",fontSize:11,flexShrink:0,fontWeight:600}} title="Add outdoor zone">🛰 ＋</button>
+    {/* Quick Add / Floor Plan toggle — only for floor tabs, not outdoor zones */}
+    {activeTabType==="floor"&&activeF&&(
+      <div style={{marginLeft:"auto",display:"flex",gap:0,borderLeft:"1px solid "+DM.border,flexShrink:0}}>
+        <button
+          onClick={()=>updFloor(f=>{f.quickAdd=false;})}
+          style={{padding:"4px 12px",border:"none",borderRight:"1px solid "+DM.border,
+            background:!activeF.quickAdd?(darkMode?"#1A0A0E":"#FFF0EF"):"transparent",
+            color:!activeF.quickAdd?FT.red:DM.textSub,
+            cursor:"pointer",fontSize:11,fontWeight:!activeF.quickAdd?700:400,whiteSpace:"nowrap",flexShrink:0}}
+          title="Floor plan mode — place cameras on a map">
+          🗺 Floor Plan
+        </button>
+        <button
+          onClick={()=>updFloor(f=>{f.quickAdd=true;})}
+          style={{padding:"4px 12px",border:"none",
+            background:activeF.quickAdd?(darkMode?"#0A1A0E":"#F0FFF4"):"transparent",
+            color:activeF.quickAdd?FT.green:DM.textSub,
+            cursor:"pointer",fontSize:11,fontWeight:activeF.quickAdd?700:400,whiteSpace:"nowrap",flexShrink:0}}
+          title="Quick Add — add cameras by model and quantity">
+          📋 Quick Add
+        </button>
+      </div>
+    )}
   </div>
 
+  {/* ── Quick Add mode — shows when floor has quickAdd:true ─────────────── */}
+  {activeTabType==="floor"&&activeF?.quickAdd?(
+    <div style={{flex:1,overflow:"auto",padding:16,background:DM.bg}}>
+      <div style={{maxWidth:800,margin:"0 auto"}}>
+        <div style={{...S.panR,marginBottom:12}}>
+          <div style={{fontSize:14,fontWeight:800,color:FT.navy,marginBottom:4}}>📋 Quick Add — {activeF.name}</div>
+          <div style={{fontSize:11,color:DM.textSub}}>Add cameras by model and quantity without a floor plan. All cameras appear in the BOM and sizing calculations. Switch to 🗺 Floor Plan mode to place them on a map.</div>
+          {activeF.cameras.length>0&&(
+            <div style={{marginTop:8,display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
+              <span style={{background:FT.green,color:FT.white,padding:"2px 10px",borderRadius:3,fontWeight:700,fontSize:11}}>
+                {activeF.cameras.length} camera{activeF.cameras.length!==1?"s":""} added
+              </span>
+              <button style={{...S.btn("primary"),fontSize:10}}
+                onClick={()=>updCams(cs=>{cs.splice(0,cs.length);})}>
+                🗑 Clear all cameras
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Cloud cameras */}
+        <div style={{marginBottom:10,fontWeight:700,fontSize:12,color:FT.red,letterSpacing:0.5}}>☁ CLOUD CAMERAS (FortiCamera Cloud)</div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(230px,1fr))",gap:8,marginBottom:16}}>
+          {CAMERA_DB.filter(d=>d.cloudOnly).map(d=>{
+            const qty=activeF.cameras.filter(c=>c.model===d.model).length;
+            return(
+              <div key={d.model} style={{background:DM.surface,border:"1px solid "+(qty>0?FT.red:DM.border),borderLeft:"3px solid "+(qty>0?FT.red:DM.border),borderRadius:6,padding:"10px 12px"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:4}}>
+                  <div>
+                    <div style={{fontWeight:700,fontSize:11,color:qty>0?FT.red:DM.text}}>{d.model}</div>
+                    <div style={{fontSize:9,color:DM.textSub}}>{d.resolution} · {d.fov}° FOV · IR {d.irRange}m</div>
+                    <div style={{fontSize:9,color:DM.muted,marginTop:2}}>{d.desc}</div>
+                  </div>
+                  {qty>0&&<span style={{background:FT.red,color:FT.white,borderRadius:10,padding:"1px 7px",fontSize:10,fontWeight:700,flexShrink:0,marginLeft:4}}>{qty}</span>}
+                </div>
+                <div style={{display:"flex",gap:4,alignItems:"center",marginTop:6}}>
+                  <button
+                    style={{width:26,height:26,border:"1px solid "+DM.border,borderRadius:4,background:DM.bg,color:DM.text,cursor:qty>0?"pointer":"not-allowed",fontSize:15,lineHeight:1,opacity:qty>0?1:0.35,fontWeight:700}}
+                    disabled={qty===0}
+                    onClick={()=>updCams(cs=>{const i=cs.findLastIndex?cs.findLastIndex(c=>c.model===d.model):([...cs].reverse().findIndex(c=>c.model===d.model)!==-1?cs.length-1-([...cs].reverse().findIndex(c=>c.model===d.model)):-1);if(i>=0)cs.splice(i,1);})}>
+                    −
+                  </button>
+                  <span style={{minWidth:28,textAlign:"center",fontWeight:700,fontSize:13,color:qty>0?FT.red:DM.textSub}}>{qty}</span>
+                  <button
+                    style={{width:26,height:26,border:"none",borderRadius:4,background:FT.red,color:FT.white,cursor:"pointer",fontSize:15,lineHeight:1,fontWeight:700}}
+                    onClick={()=>updCams(cs=>{cs.push({id:"cam_"+makeId(),model:d.model,x:0,y:0,rotation:0,label:"CAM-"+String(nid.current++).padStart(2,"0"),notes:"",location:"",quickAdd:true});})}>
+                    ＋
+                  </button>
+                  <div style={{flex:1,display:"flex",gap:3}}>
+                    {[5,10,20].map(n=>(
+                      <button key={n} style={{flex:1,padding:"3px 0",border:"1px solid "+DM.border,borderRadius:3,background:DM.bg,color:DM.textSub,cursor:"pointer",fontSize:9,fontWeight:600}}
+                        onClick={()=>updCams(cs=>{for(let i=0;i<n;i++)cs.push({id:"cam_"+makeId(),model:d.model,x:0,y:0,rotation:0,label:"CAM-"+String(nid.current++).padStart(2,"0"),notes:"",location:"",quickAdd:true});})}>
+                        +{n}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Recorder cameras */}
+        <div style={{marginBottom:10,fontWeight:700,fontSize:12,color:FT.navy,letterSpacing:0.5}}>🖥 RECORDER CAMERAS (FortiRecorder)</div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(230px,1fr))",gap:8}}>
+          {CAMERA_DB.filter(d=>!d.cloudOnly).map(d=>{
+            const qty=activeF.cameras.filter(c=>c.model===d.model).length;
+            return(
+              <div key={d.model} style={{background:DM.surface,border:"1px solid "+(qty>0?FT.navy:DM.border),borderLeft:"3px solid "+(qty>0?FT.navy:DM.border),borderRadius:6,padding:"10px 12px"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:4}}>
+                  <div>
+                    <div style={{fontWeight:700,fontSize:11,color:qty>0?FT.navy:DM.text}}>{d.model}</div>
+                    <div style={{fontSize:9,color:DM.textSub}}>{d.resolution} · {d.fov}° FOV · IR {d.irRange}m</div>
+                    <div style={{fontSize:9,color:DM.muted,marginTop:2}}>{d.desc}</div>
+                  </div>
+                  {qty>0&&<span style={{background:FT.navy,color:FT.white,borderRadius:10,padding:"1px 7px",fontSize:10,fontWeight:700,flexShrink:0,marginLeft:4}}>{qty}</span>}
+                </div>
+                <div style={{display:"flex",gap:4,alignItems:"center",marginTop:6}}>
+                  <button
+                    style={{width:26,height:26,border:"1px solid "+DM.border,borderRadius:4,background:DM.bg,color:DM.text,cursor:qty>0?"pointer":"not-allowed",fontSize:15,lineHeight:1,opacity:qty>0?1:0.35,fontWeight:700}}
+                    disabled={qty===0}
+                    onClick={()=>updCams(cs=>{const i=cs.findLastIndex?cs.findLastIndex(c=>c.model===d.model):([...cs].reverse().findIndex(c=>c.model===d.model)!==-1?cs.length-1-([...cs].reverse().findIndex(c=>c.model===d.model)):-1);if(i>=0)cs.splice(i,1);})}>
+                    −
+                  </button>
+                  <span style={{minWidth:28,textAlign:"center",fontWeight:700,fontSize:13,color:qty>0?FT.navy:DM.textSub}}>{qty}</span>
+                  <button
+                    style={{width:26,height:26,border:"none",borderRadius:4,background:FT.navy,color:FT.white,cursor:"pointer",fontSize:15,lineHeight:1,fontWeight:700}}
+                    onClick={()=>updCams(cs=>{cs.push({id:"cam_"+makeId(),model:d.model,x:0,y:0,rotation:0,label:"CAM-"+String(nid.current++).padStart(2,"0"),notes:"",location:"",quickAdd:true});})}>
+                    ＋
+                  </button>
+                  <div style={{flex:1,display:"flex",gap:3}}>
+                    {[5,10,20].map(n=>(
+                      <button key={n} style={{flex:1,padding:"3px 0",border:"1px solid "+DM.border,borderRadius:3,background:DM.bg,color:DM.textSub,cursor:"pointer",fontSize:9,fontWeight:600}}
+                        onClick={()=>updCams(cs=>{for(let i=0;i<n;i++)cs.push({id:"cam_"+makeId(),model:d.model,x:0,y:0,rotation:0,label:"CAM-"+String(nid.current++).padStart(2,"0"),notes:"",location:"",quickAdd:true});})}>
+                        +{n}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  ):(
   <div ref={canvasWrapRef} style={S.cvRow}>
     {importing&&(
       <div style={{position:"absolute",inset:0,zIndex:99,background:"rgba(26,26,46,0.75)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:14,pointerEvents:"none"}}>
@@ -2194,6 +2323,7 @@ export default function App(){
       </div>
     </div>
   </div>
+  )/* end floor plan / quick-add conditional */}
 </>}
 
 {/* ════ QUALITY TAB ═══════════════════════════════════════════════════════ */}
