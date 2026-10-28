@@ -1818,7 +1818,7 @@ export default function App(){
             const Div=()=><div style={{width:36,height:1,background:DM.border,margin:"3px 0"}}/>;
             return(<>
               <input type="file" accept="image/*" ref={fileRef} style={{display:"none"}} onChange={handleUpload}/>
-              <Btn icon="📂" label="Upload" onClick={()=>fileRef.current.click()} title="Upload floor plan"/>
+              <Btn icon="📂" label="Upload Floor Plan" onClick={()=>fileRef.current.click()} title="Upload floor plan"/>
               <Div/>
               {/* Scale */}
               {!ppf
