@@ -1729,7 +1729,7 @@ export default function App(){
     iB:c=>({background:"none",border:"none",cursor:"pointer",color:c||FT.grayMid,fontSize:12,padding:"1px 3px",lineHeight:1}),
     div:{width:1,height:18,background:FT.gray,margin:"0 2px",flexShrink:0},
   };
-  const TABS=[["planner","Floor Plan"],["quality","Quality"],["bom","BOM"],["sizing","Sizing"]];
+  const TABS=[["planner","Floor Plan"],["quality","Quality"],["bom","BOM"],["sizing","Sizing"],["comparison","Comparison"]];
 
 
   return(
@@ -2910,6 +2910,202 @@ export default function App(){
     </div>
   </div>
 </div>}
+
+{/* ════ COMPARISON TAB ════════════════════════════════════════════════════ */}
+{tab==="comparison"&&(()=>{
+  const COMP_DB=[
+    // ── AXIS ──────────────────────────────────────────────────────────────
+    {vendor:"Axis",  model:"P3265-V",     form:"Indoor Dome",          res:"2MP",   fov:100, ir:0,  poe:"af",  ai:true,  cloud:false, desc:"2MP indoor dome, deep learning analytics (ACAP), varifocal 3.4–8.9mm, IP52/IK10",
+     fortinet:"FCM-CD51-C", fortiDesc:"Cloud-managed dome, 5MP, 103° FOV, IR 20m — higher resolution + built-in cloud mgmt vs Axis VMS dependency"},
+    {vendor:"Axis",  model:"P3265-LV",    form:"Indoor/Outdoor Dome",  res:"2MP",   fov:100, ir:40, poe:"af",  ai:true,  cloud:false, desc:"2MP dome with IR 40m, deep learning, varifocal, IP66/IK10",
+     fortinet:"FCM-FD55-CA", fortiDesc:"5MP AI dome, 105° FOV, IR 50m — higher resolution, longer IR, integrated AI analytics, cloud-ready"},
+    {vendor:"Axis",  model:"P3267-LVE",   form:"Outdoor Dome",         res:"5MP",   fov:104, ir:40, poe:"af",  ai:true,  cloud:false, desc:"5MP outdoor dome, varifocal, IR 40m, OptimizedIR, deep learning",
+     fortinet:"FCM-FD55-CA", fortiDesc:"5MP AI dome, IR 50m, 105° FOV — matched resolution with longer IR range and cloud analytics option"},
+    {vendor:"Axis",  model:"P3268-LVE",   form:"Outdoor Dome",         res:"8MP",   fov:100, ir:40, poe:"at",  ai:true,  cloud:false, desc:"8MP 4K dome, varifocal, IR 40m, deep learning analytics",
+     fortinet:"FCM-FB85-CA", fortiDesc:"8MP AI bullet, IR 50m — matched resolution, superior IR range, built-in AI + FortiCamera cloud option"},
+    {vendor:"Axis",  model:"M3106-LVE",   form:"Mini Dome",            res:"4MP",   fov:103, ir:15, poe:"af",  ai:false, cloud:false, desc:"4MP mini dome, fixed lens, IR 15m, IP66/IK10, budget tier",
+     fortinet:"FCM-CD51-C", fortiDesc:"5MP cloud dome — higher resolution, 20m IR, full cloud platform vs standalone NVR"},
+    {vendor:"Axis",  model:"M3116-LVE",   form:"Mini Dome",            res:"4MP",   fov:130, ir:20, poe:"af",  ai:false, cloud:false, desc:"4MP mini dome, wide 130° FOV, IR 20m, IP66/IK10",
+     fortinet:"FCM-MC51-C", fortiDesc:"5MP mini-cube, 103° FOV, IR 8m — higher MP, cloud-managed, adds FortiCamera Cloud analytics"},
+    {vendor:"Axis",  model:"Q3538-LVE",   form:"Outdoor Dome",         res:"8MP",   fov:103, ir:40, poe:"at",  ai:true,  cloud:false, desc:"8MP 4K outdoor dome, varifocal, IR 40m, deep learning, IP66/IK10",
+     fortinet:"FCM-FB85-CA", fortiDesc:"8MP AI bullet, IR 50m — matched resolution, superior IR, FortiCamera Cloud option for cloud-managed analytics"},
+    {vendor:"Axis",  model:"M4206-V",     form:"Multi-sensor",         res:"4×2MP", fov:360, ir:0,  poe:"at",  ai:false, cloud:false, desc:"4-sensor 360° multi-sensor, 8MP total, no IR, indoor/outdoor",
+     fortinet:"FCM-FE120B-CA", fortiDesc:"12MP AI fisheye, 360° FOV, IR 20m — single unit equivalent, adds AI analytics + IR night vision"},
+    {vendor:"Axis",  model:"Q6125-LE",    form:"PTZ Outdoor",          res:"2MP",   fov:64,  ir:200,poe:"at",  ai:false, cloud:false, desc:"PTZ outdoor, 1080p, 32× optical zoom, IR 200m, IP66",
+     fortinet:"FCM-FB85-CA", fortiDesc:"Fixed AI bullet — no PTZ equivalent in FortiCamera line yet; FB85-CA covers most analytics use cases without PTZ"},
+
+    // ── VERKADA ───────────────────────────────────────────────────────────
+    {vendor:"Verkada",model:"CD22",       form:"Indoor Dome",          res:"3MP",   fov:100, ir:10, poe:"af",  ai:true,  cloud:true,  desc:"3MP indoor dome, cloud-managed, person/vehicle detection, 30-day cloud storage included",
+     fortinet:"FCM-CD51-C", fortiDesc:"5MP cloud dome — higher resolution, longer IR 20m, FortiCamera Cloud platform with FortiGate integration"},
+    {vendor:"Verkada",model:"CD22-E",     form:"Outdoor Dome",         res:"3MP",   fov:100, ir:20, poe:"af",  ai:true,  cloud:true,  desc:"3MP outdoor dome, cloud-managed, IP66, person/vehicle AI, 30-day storage",
+     fortinet:"FCM-CD51-C", fortiDesc:"5MP cloud dome — higher resolution, same IR range, Fortinet ecosystem integration (FortiGate/FortiNAC)"},
+    {vendor:"Verkada",model:"CD62",       form:"Indoor Dome",          res:"4K",    fov:116, ir:30, poe:"af",  ai:true,  cloud:true,  desc:"4K indoor dome, cloud-managed, 90-day storage, people analytics, license plate recognition",
+     fortinet:"FCM-FD55-CA", fortiDesc:"5MP AI dome — comparable analytics, no mandatory cloud subscription, integrates with on-prem FortiRecorder or hybrid"},
+    {vendor:"Verkada",model:"CD62-E",     form:"Outdoor Dome",         res:"4K",    fov:116, ir:30, poe:"af",  ai:true,  cloud:true,  desc:"4K outdoor dome, IP66, cloud-managed, 90-day storage, AI analytics",
+     fortinet:"FCM-FD55-CA", fortiDesc:"5MP AI dome — no per-camera cloud subscription lock-in, hybrid or on-prem options, FortiSIEM integration"},
+    {vendor:"Verkada",model:"CD63-E",     form:"Outdoor Dome",         res:"4K",    fov:116, ir:30, poe:"af",  ai:true,  cloud:true,  desc:"4K outdoor dome, latest gen, cloud-managed, 365-day storage option, advanced AI",
+     fortinet:"FCM-FD55-CA", fortiDesc:"5MP AI dome — Fortinet offers flexible licensing (perpetual + cloud) vs Verkada subscription-only model"},
+    {vendor:"Verkada",model:"CB62-E",     form:"Outdoor Bullet",       res:"4K",    fov:90,  ir:50, poe:"af",  ai:true,  cloud:true,  desc:"4K outdoor bullet, cloud-managed, long-range IR, person/vehicle AI",
+     fortinet:"FCM-FB85-CA", fortiDesc:"8MP AI bullet — higher resolution, matched IR range, flexible cloud/on-prem/hybrid deployment"},
+    {vendor:"Verkada",model:"CF81-E",     form:"Outdoor Fisheye",      res:"12MP",  fov:360, ir:0,  poe:"at",  ai:true,  cloud:true,  desc:"12MP outdoor fisheye, 360° view, cloud-managed, AI crowd analytics, no IR",
+     fortinet:"FCM-FE120B-CA", fortiDesc:"12MP AI fisheye, IR 20m — matched resolution + adds IR night vision, same 360° coverage without cloud-only lock-in"},
+    {vendor:"Verkada",model:"CM61",       form:"Mini Dome",            res:"4K",    fov:103, ir:15, poe:"af",  ai:true,  cloud:true,  desc:"4K mini dome, cloud-managed, discreet ceiling mount, AI analytics",
+     fortinet:"FCM-MC51-C", fortiDesc:"5MP mini-cube, 103° FOV, IR 8m — competitive resolution, same FOV, lower TCO without mandatory cloud subscription"},
+    {vendor:"Verkada",model:"CP52-E",     form:"PTZ",                  res:"5MP",   fov:65,  ir:0,  poe:"at",  ai:true,  cloud:true,  desc:"5MP PTZ, cloud-managed, 5× optical zoom, AI object tracking",
+     fortinet:"FCM-FB85-CA", fortiDesc:"Fixed AI bullet — no PTZ in FortiCamera range; FB85-CA offers 84° FOV with AI as closest alternative"},
+
+    // ── MERAKI ────────────────────────────────────────────────────────────
+    {vendor:"Meraki", model:"MV2",        form:"Indoor Mini",          res:"2MP",   fov:134, ir:8,  poe:"af",  ai:true,  cloud:true,  desc:"1080p indoor mini, cloud-managed, Wi-Fi, person detection, 30-day cloud storage",
+     fortinet:"FCM-MC51-C", fortiDesc:"5MP mini-cube, 103° FOV, IR 8m — higher resolution, wired PoE reliability, lower cloud licensing cost"},
+    {vendor:"Meraki", model:"MV12W",      form:"Indoor Dome",          res:"2MP",   fov:132, ir:15, poe:"af",  ai:true,  cloud:true,  desc:"1080p indoor dome, cloud-managed, Wi-Fi, heatmaps, historical person tracking",
+     fortinet:"FCM-MC51-C", fortiDesc:"5MP mini-cube — higher resolution, FortiCamera Cloud includes motion analytics, no per-camera Meraki licensing"},
+    {vendor:"Meraki", model:"MV22X",      form:"Indoor/Outdoor Dome",  res:"4MP",   fov:115, ir:20, poe:"af",  ai:true,  cloud:true,  desc:"4MP dome, varifocal, cloud-managed, 512GB onboard, person/vehicle detection",
+     fortinet:"FCM-CD55-C", fortiDesc:"5MP cloud dome, varifocal, IR 20m — higher resolution, same IR range, FortiGate integration, no Cisco licensing overhead"},
+    {vendor:"Meraki", model:"MV72X",      form:"Outdoor Dome",         res:"4MP",   fov:115, ir:20, poe:"af",  ai:true,  cloud:true,  desc:"4MP outdoor dome, IP67/IK10, varifocal, cloud-managed, 512GB onboard",
+     fortinet:"FCM-FD55-CA", fortiDesc:"5MP AI dome, IR 50m — higher resolution, significantly longer IR range, integrated AI analytics"},
+    {vendor:"Meraki", model:"MV32",       form:"Fisheye",              res:"4MP",   fov:180, ir:0,  poe:"af",  ai:true,  cloud:true,  desc:"4MP fisheye 180°, cloud-managed, ceiling mount, no IR, person tracking",
+     fortinet:"FCM-FE120B-CA", fortiDesc:"12MP AI fisheye, full 360°, IR 20m — 3× higher resolution, adds IR, full 360° vs 180°"},
+    {vendor:"Meraki", model:"MV52",       form:"Long-range Bullet",    res:"4K",    fov:37,  ir:50, poe:"at",  ai:true,  cloud:true,  desc:"4K outdoor bullet, cloud-managed, long-range varifocal 12–37°, IR 50m, 1TB onboard",
+     fortinet:"FCM-FB85-CA", fortiDesc:"8MP AI bullet, IR 50m — comparable specs, no Meraki licensing cost, FortiCamera Cloud optional"},
+  ];
+
+  const vendors=["Axis","Verkada","Meraki"];
+  const vColors={Axis:"#003366",Verkada:"#006EFF",Meraki:"#67B346"};
+  const vBg={Axis:"#E8EFF8",Verkada:"#E6F0FF",Meraki:"#EDF7E6"};
+  const [cmpVendor,setCmpVendor]=useState("All");
+  const [cmpSearch,setCmpSearch]=useState("");
+  const [cmpForm,setCmpForm]=useState("All");
+
+  const forms=[...new Set(COMP_DB.map(c=>c.form.split(" ").pop()))].sort();
+  const filtered=COMP_DB.filter(c=>{
+    if(cmpVendor!=="All"&&c.vendor!==cmpVendor)return false;
+    if(cmpForm!=="All"&&!c.form.includes(cmpForm))return false;
+    if(cmpSearch){
+      const q=cmpSearch.toLowerCase();
+      return c.model.toLowerCase().includes(q)||c.vendor.toLowerCase().includes(q)||
+             c.form.toLowerCase().includes(q)||c.res.toLowerCase().includes(q)||
+             c.fortinet.toLowerCase().includes(q)||c.desc.toLowerCase().includes(q);
+    }
+    return true;
+  });
+
+  return<div style={{flex:1,overflow:"auto",padding:12,background:DM.bg}}>
+    <div style={{...S.panR,marginBottom:12}}>
+      <div style={{fontSize:14,fontWeight:800,color:FT.navy,marginBottom:4}}>🔄 Competitive Camera Comparison</div>
+      <div style={{fontSize:11,color:DM.textSub}}>Find the closest Fortinet FortiCamera equivalent for Axis, Verkada, and Meraki competitor cameras.</div>
+    </div>
+
+    {/* Search + filters */}
+    <div style={{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap",alignItems:"center"}}>
+      <div style={{position:"relative",flex:1,minWidth:180}}>
+        <span style={{position:"absolute",left:8,top:"50%",transform:"translateY(-50%)",fontSize:14,pointerEvents:"none"}}>🔍</span>
+        <input
+          value={cmpSearch} onChange={e=>setCmpSearch(e.target.value)}
+          placeholder="Search by model, resolution, form factor…"
+          style={{...S.inp,paddingLeft:28,width:"100%",fontSize:11}}
+        />
+        {cmpSearch&&<button onClick={()=>setCmpSearch("")}
+          style={{position:"absolute",right:6,top:"50%",transform:"translateY(-50%)",border:"none",background:"none",cursor:"pointer",fontSize:13,color:DM.muted}}>✕</button>}
+      </div>
+      {/* Vendor filter */}
+      <div style={{display:"flex",gap:4,flexShrink:0}}>
+        {["All",...vendors].map(v=>(
+          <button key={v} onClick={()=>setCmpVendor(v)}
+            style={{padding:"4px 10px",borderRadius:4,border:"1px solid "+(cmpVendor===v?(vColors[v]||FT.navy):DM.border),
+              background:cmpVendor===v?(vBg[v]||"#E8EFF8"):"transparent",
+              color:cmpVendor===v?(vColors[v]||FT.navy):DM.textSub,
+              cursor:"pointer",fontSize:11,fontWeight:cmpVendor===v?700:400}}>
+            {v==="All"?"All Vendors":v}
+          </button>
+        ))}
+      </div>
+      {/* Form factor filter */}
+      <select value={cmpForm} onChange={e=>setCmpForm(e.target.value)} style={{...S.sel,fontSize:11,flexShrink:0}}>
+        <option value="All">All Types</option>
+        {forms.map(f=><option key={f} value={f}>{f}</option>)}
+      </select>
+    </div>
+
+    {/* Result count */}
+    <div style={{fontSize:10,color:DM.muted,marginBottom:8}}>
+      Showing {filtered.length} of {COMP_DB.length} cameras
+    </div>
+
+    {/* Table */}
+    <div style={{overflowX:"auto"}}>
+      <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
+        <thead>
+          <tr style={{background:FT.navy,color:FT.white}}>
+            {["Vendor","Competitor Model","Type","Res","FOV","IR","PoE","AI","Fortinet Equivalent","Why Fortinet"].map(h=>(
+              <th key={h} style={{padding:"7px 8px",textAlign:"left",fontWeight:700,fontSize:10,whiteSpace:"nowrap"}}>{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {filtered.map((c,i)=>{
+            const ft=CAMERA_DB.find(x=>x.model===c.fortinet);
+            return<tr key={c.vendor+c.model} style={{borderBottom:"1px solid "+DM.border,background:i%2===0?DM.surface:DM.bg}}>
+              {/* Vendor */}
+              <td style={{padding:"6px 8px",whiteSpace:"nowrap"}}>
+                <span style={{background:vBg[c.vendor],color:vColors[c.vendor],padding:"2px 7px",borderRadius:3,fontWeight:700,fontSize:10}}>{c.vendor}</span>
+              </td>
+              {/* Model */}
+              <td style={{padding:"6px 8px",whiteSpace:"nowrap"}}>
+                <div style={{fontWeight:700,color:DM.text,fontSize:11}}>{c.model}</div>
+                <div style={{fontSize:9,color:DM.muted,marginTop:1,maxWidth:160}}>{c.desc}</div>
+              </td>
+              {/* Type */}
+              <td style={{padding:"6px 8px",color:DM.textSub,fontSize:10,whiteSpace:"nowrap"}}>{c.form}</td>
+              {/* Resolution */}
+              <td style={{padding:"6px 8px",fontWeight:600,color:DM.text,whiteSpace:"nowrap"}}>{c.res}</td>
+              {/* FOV */}
+              <td style={{padding:"6px 8px",color:DM.textSub,whiteSpace:"nowrap"}}>{c.fov}°</td>
+              {/* IR */}
+              <td style={{padding:"6px 8px",whiteSpace:"nowrap"}}>
+                {c.ir>0?<span style={{color:FT.green,fontWeight:600}}>{c.ir}m</span>:<span style={{color:DM.muted}}>—</span>}
+              </td>
+              {/* PoE */}
+              <td style={{padding:"6px 8px",whiteSpace:"nowrap"}}>
+                <span style={{...S.bdg(c.poe==="at"?FT.orange:FT.grayDark),fontSize:8}}>802.3{c.poe}</span>
+              </td>
+              {/* AI */}
+              <td style={{padding:"6px 8px",textAlign:"center"}}>
+                {c.ai?<span style={{color:FT.green,fontSize:13}}>✓</span>:<span style={{color:DM.muted,fontSize:11}}>—</span>}
+              </td>
+              {/* Fortinet Equivalent */}
+              <td style={{padding:"6px 8px",whiteSpace:"nowrap"}}>
+                <div style={{fontWeight:700,color:ft?.cloudOnly?FT.red:FT.navy,fontSize:11}}>{c.fortinet}</div>
+                {ft&&<div style={{fontSize:9,color:DM.muted,marginTop:1}}>{ft.resolution} · {ft.fov}° · IR {ft.irRange}m</div>}
+              </td>
+              {/* Why Fortinet */}
+              <td style={{padding:"6px 8px",fontSize:10,color:DM.textSub,minWidth:200,maxWidth:280}}>
+                <span style={{color:FT.green,fontWeight:700,marginRight:4}}>▶</span>{c.fortiDesc}
+              </td>
+            </tr>;
+          })}
+        </tbody>
+      </table>
+    </div>
+
+    {filtered.length===0&&(
+      <div style={{textAlign:"center",padding:"40px 20px",color:DM.muted,fontSize:12}}>
+        No cameras match your filter. Try adjusting the vendor or search term.
+      </div>
+    )}
+
+    {/* Legend */}
+    <div style={{...S.pan,marginTop:12}}>
+      <div style={S.st}>Legend</div>
+      <div style={{display:"flex",gap:16,flexWrap:"wrap",fontSize:10,color:DM.textSub}}>
+        <span><span style={{color:FT.red,fontWeight:700}}>Red model name</span> = FortiCamera Cloud (cloud-managed)</span>
+        <span><span style={{color:FT.navy,fontWeight:700}}>Navy model name</span> = FortiCamera (recorder/on-prem)</span>
+        <span><span style={{color:FT.green,fontWeight:700}}>✓</span> AI = on-camera deep learning analytics</span>
+        <span><span style={{...S.bdg(FT.orange),fontSize:8}}>802.3at</span> = PoE+ (up to 30W)</span>
+        <span><span style={{...S.bdg(FT.grayDark),fontSize:8}}>802.3af</span> = PoE std (up to 15.4W)</span>
+      </div>
+    </div>
+  </div>;
+})()}
 
       </div>
     </div>
