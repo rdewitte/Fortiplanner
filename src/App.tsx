@@ -830,6 +830,9 @@ export default function App(){
   const isTiny   = winW < 750;   // compact tool panel, hide tree below 750px
 
   const [tab,setTab]=useState("planner");
+  const [cmpVendor,setCmpVendor]=useState("All");
+  const [cmpSearch,setCmpSearch]=useState("");
+  const [cmpForm,setCmpForm]=useState("All");
   const _init=React.useMemo(()=>defProject(),[]);
   const [project,setProject]=useState(_init);
   const [activeBId,setActiveBId]=useState(_init.buildings[0].id);
@@ -2972,10 +2975,6 @@ export default function App(){
   const vendors=["Axis","Verkada","Meraki"];
   const vColors={Axis:"#003366",Verkada:"#006EFF",Meraki:"#67B346"};
   const vBg={Axis:"#E8EFF8",Verkada:"#E6F0FF",Meraki:"#EDF7E6"};
-  const [cmpVendor,setCmpVendor]=useState("All");
-  const [cmpSearch,setCmpSearch]=useState("");
-  const [cmpForm,setCmpForm]=useState("All");
-
   const forms=[...new Set(COMP_DB.map(c=>c.form.split(" ").pop()))].sort();
   const filtered=COMP_DB.filter(c=>{
     if(cmpVendor!=="All"&&c.vendor!==cmpVendor)return false;
