@@ -2573,11 +2573,195 @@ export default function App(){
         const txt=["FORTINET — BILL OF MATERIALS","=".repeat(42),"Project : "+project.name,"Customer: "+(project.customer||""),"Date    : "+new Date().toLocaleDateString(),"Cameras : "+allCams.length+"  PoE: "+totalPoe+"W","=".repeat(42),...lines.map(l=>" "+String(l.qty).padStart(3)+"  "+l.sku.padEnd(30)+" "+l.cat),"=".repeat(42),...allCams.map(c=>{const d=CAMERA_DB.find(x=>x.model===c.model);return" "+c.label.padEnd(10)+" | "+String(d?d.name:"").padEnd(22)+" | "+c.bName+"/"+c.fName+" | "+(c.location||"—");}),"=".repeat(42)].join("\n");
         const blob=new Blob([txt],{type:"text/plain"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="BOM_"+project.name.replace(/\s+/g,"_")+".txt";a.click();
       }}>⬇ Export BOM (.txt)</button>
-      <button style={{...S.btn("navy"),width:"100%",padding:"8px",fontSize:12}} onClick={()=>{
+      <button style={{...S.btn("navy"),width:"100%",padding:"8px",fontSize:12}} onClick={async()=>{
+        const XL=await import("exceljs");
+        const wb=new XL.Workbook();
+        wb.creator="FortiCamera Planner";
+        wb.created=new Date();
+
+        // ── colour palette ────────────────────────────────────────────────
+        const NAVY="FF1A1A2E",RED="FFDA291C",GREEN="FF00A651",
+              WHITE="FFFFFFFF",OFF="FFF5F5F5",GRAY="FFE0E0E0",
+              SUBT="FF555555",ORANGE="FFF47920";
+        const catColor={Camera:NAVY,Recorder:GREEN,License:RED,Accessory:ORANGE};
+
+        const hFill=c=>({type:"pattern",pattern:"solid",fgColor:{argb:c}});
+        const font=(bold,color,sz)=>({name:"Arial",bold:!!bold,color:{argb:color||"FF000000"},size:sz||10});
+        const center={horizontal:"center",vertical:"middle"};
+        const left={horizontal:"left",vertical:"middle"};
+        const border={style:"thin",color:{argb:GRAY}};
+        const thinBorder={top:border,left:border,bottom:border,right:border};
+
+        // ══ Sheet 1 — BOM Summary ════════════════════════════════════════
+        const s1=wb.addWorksheet("BOM Summary");
+        s1.properties.defaultRowHeight=16;
+        s1.columns=[
+          {key:"sku",  width:30},
+          {key:"desc", width:44},
+          {key:"cat",  width:14},
+          {key:"qty",  width:8},
+        ];
+
+        // Logo / title block
+        const titleRow=s1.addRow(["FORTINET — BILL OF MATERIALS",null,null,null]);
+        s1.mergeCells("A1:D1");
+        titleRow.height=28;
+        titleRow.getCell("A1").fill=hFill(NAVY);
+        titleRow.getCell("A1").font={name:"Arial",bold:true,color:{argb:WHITE},size:14};
+        titleRow.getCell("A1").alignment=center;
+
+        // Red accent row
+        const accentRow=s1.addRow([null,null,null,null]);
+        accentRow.height=4;
+        s1.mergeCells("A2:D2");
+        accentRow.getCell("A2").fill=hFill(RED);
+
+        // Info block rows
+        const infoData=[
+          ["Project",project.name||"—"],
+          ["Customer",project.customer||"—"],
+          ["Date",new Date().toLocaleDateString()],
+          ["Cameras",allCams.length+" total · "+cloudCamCount+" cloud · "+(allCams.length-cloudCamCount)+" on-prem"],
+          ["PoE",totalPoe+" W"],
+          ["NVR",selRec?(RECORDER_DB.find(r=>r.sku===selRec)?.name||selRec):"FortiCamera Cloud (no NVR)"],
+        ];
+        infoData.forEach(([k,v])=>{
+          const r=s1.addRow([k,v,null,null]);
+          s1.mergeCells(`B${r.number}:D${r.number}`);
+          r.getCell(1).font=font(true,SUBT,9);
+          r.getCell(2).font=font(false,"FF000000",10);
+          r.getCell(1).alignment=left;r.getCell(2).alignment=left;
+          r.height=15;
+        });
+
+        // Spacer
+        s1.addRow([]);
+
+        // Table header
+        const hdr=s1.addRow(["SKU","Description","Category","Qty"]);
+        hdr.height=18;
+        ["A","B","C","D"].forEach(col=>{
+          const c=hdr.getCell(col);
+          c.fill=hFill(NAVY);
+          c.font=font(true,WHITE,10);
+          c.alignment=col==="D"?{...center}:{...left};
+          c.border=thinBorder;
+        });
+
+        // Data rows
         const lines=bomLines();
-        const csv=["FORTINET BOM","","Project,"+project.name,"Customer,"+(project.customer||""),"","SKU,Description,Category,Qty",...lines.map(l=>l.sku+',"'+l.desc+'",'+l.cat+","+l.qty),"","Label,Model,Building,Floor,Zone,Rotation",...allCams.map(c=>c.label+","+c.model+","+c.bName+","+c.fName+',"'+c.location+'",'+c.rotation+"°")].join("\n");
-        const blob=new Blob([csv],{type:"text/csv"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="BOM_"+project.name.replace(/\s+/g,"_")+".csv";a.click();
-      }}>📊 Export BOM (.csv)</button>
+        lines.forEach((l,i)=>{
+          const r=s1.addRow([l.sku,l.desc,l.cat,l.qty]);
+          r.height=16;
+          const isEven=i%2===0;
+          const rowFill=hFill(isEven?WHITE:OFF);
+          const acArgb=catColor[l.cat]||NAVY;
+          // SKU cell — colored by category
+          const skuCell=r.getCell("A");
+          skuCell.font=font(true,acArgb,10);
+          skuCell.fill=rowFill;skuCell.alignment=left;skuCell.border=thinBorder;
+          // Desc
+          const dCell=r.getCell("B");
+          dCell.font=font(false,"FF000000",10);
+          dCell.fill=rowFill;dCell.alignment=left;dCell.border=thinBorder;
+          // Category badge fill
+          const cCell=r.getCell("C");
+          cCell.fill=hFill(acArgb);
+          cCell.font=font(true,WHITE,9);
+          cCell.alignment=center;cCell.border=thinBorder;
+          // Qty
+          const qCell=r.getCell("D");
+          qCell.value=l.qty;
+          qCell.font=font(true,acArgb,11);
+          qCell.fill=rowFill;qCell.alignment=center;qCell.border=thinBorder;
+        });
+
+        // Total row
+        const totRow=s1.addRow(["","TOTAL UNITS","",lines.reduce((s,l)=>s+l.qty,0)]);
+        totRow.height=17;
+        totRow.eachCell((c,n)=>{
+          c.fill=hFill(NAVY);c.font=font(true,WHITE,10);
+          c.border=thinBorder;
+          c.alignment=n===4?center:left;
+        });
+
+        // ── PoE summary note below table ─────────────────────────────────
+        s1.addRow([]);
+        const poeRow=s1.addRow(["PoE Summary","802.3af ≤ 15.4W / port · 802.3at ≤ 30W / port · Total project: "+totalPoe+" W"]);
+        s1.mergeCells(`B${poeRow.number}:D${poeRow.number}`);
+        poeRow.getCell(1).font=font(true,SUBT,9);
+        poeRow.getCell(2).font={name:"Arial",italic:true,color:{argb:SUBT},size:9};
+
+        // ── Legend ───────────────────────────────────────────────────────
+        s1.addRow([]);
+        const legHdr=s1.addRow(["Category","Color key",null,null]);
+        s1.mergeCells(`B${legHdr.number}:D${legHdr.number}`);
+        legHdr.getCell(1).font=font(true,SUBT,9);legHdr.getCell(2).font=font(true,SUBT,9);
+        [["Camera","Navy — on-prem camera SKU",NAVY],
+         ["Recorder","Green — FortiRecorder NVR",GREEN],
+         ["License","Red — cloud subscription license",RED],
+         ["Accessory","Orange — mount / accessory",ORANGE],
+        ].forEach(([cat,label,col])=>{
+          const r=s1.addRow([cat,label,null,null]);
+          s1.mergeCells(`B${r.number}:D${r.number}`);
+          r.getCell(1).fill=hFill(col);r.getCell(1).font=font(true,WHITE,9);r.getCell(1).alignment=center;
+          r.getCell(2).font={name:"Arial",color:{argb:col},size:9};
+          r.height=14;
+        });
+
+        // ══ Sheet 2 — Camera Detail ══════════════════════════════════════
+        const s2=wb.addWorksheet("Camera Detail");
+        s2.properties.defaultRowHeight=15;
+        s2.columns=[
+          {key:"label",width:10},{key:"model",width:18},{key:"name",width:28},
+          {key:"bld",width:18},{key:"flr",width:14},{key:"zone",width:22},{key:"rot",width:10},
+        ];
+
+        const titleRow2=s2.addRow(["FortiCamera Planner — Camera Placement Detail",null,null,null,null,null,null]);
+        s2.mergeCells("A1:G1");
+        titleRow2.height=22;
+        titleRow2.getCell("A1").fill=hFill(NAVY);
+        titleRow2.getCell("A1").font={name:"Arial",bold:true,color:{argb:WHITE},size:12};
+        titleRow2.getCell("A1").alignment=center;
+        const accentRow2=s2.addRow([null,null,null,null,null,null,null]);
+        accentRow2.height=4;s2.mergeCells("A2:G2");
+        accentRow2.getCell("A2").fill=hFill(RED);
+
+        const hdr2=s2.addRow(["Label","Model","Camera Name","Building","Floor","Zone / Location","Rotation"]);
+        hdr2.height=18;
+        ["A","B","C","D","E","F","G"].forEach(col=>{
+          const c=hdr2.getCell(col);
+          c.fill=hFill(NAVY);c.font=font(true,WHITE,10);c.alignment=left;c.border=thinBorder;
+        });
+
+        allCams.forEach((c,i)=>{
+          const d=CAMERA_DB.find(x=>x.model===c.model);
+          const isEven=i%2===0;
+          const r=s2.addRow([c.label,c.model,d?d.name:c.model,c.bName,c.fName,c.location||"—",c.rotation+"°"]);
+          r.height=15;
+          const rowFill=hFill(isEven?WHITE:OFF);
+          const textCol=d?.cloudOnly?RED:NAVY;
+          r.eachCell((cell,n)=>{
+            cell.fill=rowFill;
+            cell.font=n<=3?font(n===1,textCol,10):font(false,"FF000000",10);
+            cell.border=thinBorder;cell.alignment=left;
+          });
+        });
+
+        // Cloud cameras summary note
+        s2.addRow([]);
+        const noteRow=s2.addRow(["☁ Cloud-only SKUs shown in red · 🖥 On-prem SKUs shown in navy",null,null,null,null,null,null]);
+        s2.mergeCells(`A${noteRow.number}:G${noteRow.number}`);
+        noteRow.getCell(1).font={name:"Arial",italic:true,color:{argb:SUBT},size:9};
+
+        // ── Write & download ─────────────────────────────────────────────
+        const buf=await wb.xlsx.writeBuffer();
+        const blob=new Blob([buf],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+        const a=document.createElement("a");
+        a.href=URL.createObjectURL(blob);
+        a.download="BOM_"+project.name.replace(/\s+/g,"_")+".xlsx";
+        a.click();
+      }}>📊 Export BOM (.xlsx)</button>
     </div>
   </div>
 </div>}
