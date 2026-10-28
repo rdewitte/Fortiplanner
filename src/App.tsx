@@ -1,6 +1,5 @@
 // @ts-nocheck
 import React, { useState, useRef, useEffect, useCallback } from "react";
-import * as XLSX from "xlsx";
 
 const FT = {
   red:"#DA291C", navy:"#1A1A2E", white:"#FFFFFF", offWhite:"#F5F5F5",
@@ -2577,31 +2576,22 @@ export default function App(){
       <button style={{...S.btn("navy"),width:"100%",padding:"8px",fontSize:12}} onClick={()=>{
         // ── SheetJS cell-style helpers ────────────────────────────────────
         // Colors (6-char hex, no alpha prefix — SheetJS uses rgb not argb)
-        const C={navy:"1A1A2E",red:"DA291C",green:"00A651",white:"FFFFFF",
-                 off:"F5F5F5",gray:"E0E0E0",sub:"555555",orange:"F47920"};
+        // HTML-table-as-Excel: full color support, no paid library needed
+        const C={navy:"#1A1A2E",red:"#DA291C",green:"#00A651",white:"#FFFFFF",
+                 off:"#F5F5F5",gray:"#E0E0E0",sub:"#555555",orange:"#F47920"};
         const catC={Camera:C.navy,Recorder:C.green,License:C.red,Accessory:C.orange};
-        const fill=rgb=>({patternType:"solid",fgColor:{rgb},bgColor:{rgb:"FFFFFF"}});
-        const fnt=(bold,rgb,sz)=>({name:"Arial",bold:!!bold,color:{rgb:rgb||"000000"},sz:sz||10});
-        const aln=(h,v)=>({horizontal:h||"left",vertical:v||"center",wrapText:false});
-        const brdr=()=>({top:{style:"thin",color:{rgb:C.gray}},bottom:{style:"thin",color:{rgb:C.gray}},left:{style:"thin",color:{rgb:C.gray}},right:{style:"thin",color:{rgb:C.gray}}});
-        const cell=(v,type,bold,fgRgb,bgRgb,halign,sz,italic)=>({
-          v,t:type||"s",
-          s:{font:{name:"Arial",bold:!!bold,italic:!!italic,color:{rgb:fgRgb||"000000"},sz:sz||10},
-             fill:bgRgb?fill(bgRgb):{patternType:"none"},
-             alignment:aln(halign||"left"),
-             border:brdr()}
-        });
-        const hdrCell=(v,bgRgb,halign)=>cell(v,"s",true,"FFFFFF",bgRgb||C.navy,halign||"center");
-        const empty=bgRgb=>({v:"",t:"s",s:{fill:bgRgb?fill(bgRgb):{patternType:"none"},border:brdr()}});
-
+        const bd="1px solid "+C.gray;
+        const td=(v,{bg="",fg="#000000",bold=false,align="left",sz=10,colspan=1,italic=false}={})=>{
+          const s=`background:${bg||C.white};color:${fg};font-weight:${bold?"bold":"normal"};`
+                 +`font-style:${italic?"italic":"normal"};text-align:${align};`
+                 +`font-size:${sz}pt;font-family:Arial,sans-serif;`
+                 +`border:${bd};padding:3px 6px;white-space:nowrap;`;
+          return `<td style="${s}"${colspan>1?` colspan="${colspan}"`:""}>${v??""}</td>`;
+        };
+        const tr=(...cells)=>`<tr>${cells.join("")}</tr>`;
         const lines=bomLines();
-        const wb=XLSX.utils.book_new();
 
         // ══ Sheet 1 — BOM Summary ════════════════════════════════════════
-        const rows1=[];
-        // Title row
-        rows1.push([cell("FORTINET — BILL OF MATERIALS","s",true,"FFFFFF",C.navy,"center",13),empty(C.navy),empty(C.navy),empty(C.navy)]);
-        // Info block
         const infoRows=[
           ["Project",project.name||"—"],
           ["Customer",project.customer||"—"],
@@ -2610,90 +2600,81 @@ export default function App(){
           ["Total PoE",`${totalPoe} W`],
           ["NVR",selRec?(RECORDER_DB.find(r=>r.sku===selRec)?.name||selRec):"FortiCamera Cloud (no NVR)"],
         ];
-        infoRows.forEach(([k,v])=>{
-          rows1.push([cell(k,"s",true,C.sub,"FFFFFF","left",9),cell(v,"s",false,"000000","FFFFFF","left",10),empty(),empty()]);
-        });
-        rows1.push([empty(),empty(),empty(),empty()]); // spacer
-        // Table header
-        rows1.push([hdrCell("SKU"),hdrCell("Description"),hdrCell("Category"),hdrCell("Qty")]);
-        // Data
-        lines.forEach((l,i)=>{
-          const bg=i%2===0?C.white:C.off;
-          const ac=catC[l.cat]||C.navy;
-          rows1.push([
-            cell(l.sku,"s",true,ac,bg,"left"),
-            cell(l.desc,"s",false,"000000",bg,"left"),
-            cell(l.cat,"s",true,"FFFFFF",ac,"center",9),
-            {v:l.qty,t:"n",s:{font:{name:"Arial",bold:true,color:{rgb:ac},sz:11},fill:fill(bg),alignment:aln("center"),border:brdr()}},
-          ]);
-        });
-        // Total row
-        rows1.push([
-          empty(C.navy),
-          cell("TOTAL UNITS","s",true,"FFFFFF",C.navy,"right"),
-          empty(C.navy),
-          {v:lines.reduce((s,l)=>s+l.qty,0),t:"n",s:{font:{name:"Arial",bold:true,color:{rgb:"FFFFFF"},sz:11},fill:fill(C.navy),alignment:aln("center"),border:brdr()}},
-        ]);
-        rows1.push([empty(),empty(),empty(),empty()]);
-        // PoE note
-        rows1.push([
-          cell("PoE Note","s",true,C.sub,"FFFFFF","left",9),
-          cell(`802.3af ≤15.4W/port · 802.3at ≤30W/port · Project total: ${totalPoe} W`,"s",false,C.sub,"FFFFFF","left",9),
-          empty(),empty(),
-        ]);
-        rows1.push([empty(),empty(),empty(),empty()]);
-        // Legend header
-        rows1.push([cell("Legend","s",true,C.sub,"FFFFFF","left",9),cell("Category color key","s",true,C.sub,"FFFFFF","left",9),empty(),empty()]);
-        [{cat:"Camera",col:C.navy,lbl:"Navy — on-prem camera"},
-         {cat:"Recorder",col:C.green,lbl:"Green — FortiRecorder NVR"},
-         {cat:"License",col:C.red,lbl:"Red — cloud license"},
-         {cat:"Accessory",col:C.orange,lbl:"Orange — mount / accessory"},
-        ].forEach(({cat,col,lbl})=>{
-          rows1.push([cell(cat,"s",true,"FFFFFF",col,"center",9),cell(lbl,"s",false,col,"FFFFFF","left",9),empty(),empty()]);
-        });
-
-        const ws1=XLSX.utils.aoa_to_sheet(rows1);
-        ws1["!cols"]=[{wch:28},{wch:42},{wch:14},{wch:8}];
-        // Merge title cell across A-D
-        ws1["!merges"]=[{s:{r:0,c:0},e:{r:0,c:3}}];
-        XLSX.utils.book_append_sheet(wb,ws1,"BOM Summary");
+        const s1rows=[
+          tr(td("FORTINET — BILL OF MATERIALS",{bg:C.navy,fg:C.white,bold:true,align:"center",sz:13,colspan:4})),
+          ...infoRows.map(([k,v])=>tr(
+            td(k,{fg:C.sub,bold:true,sz:9}),
+            td(v,{sz:10,colspan:3}),
+          )),
+          tr(td("",{colspan:4})),
+          tr(td("SKU",{bg:C.navy,fg:C.white,bold:true,align:"center"}),td("Description",{bg:C.navy,fg:C.white,bold:true,align:"center"}),td("Category",{bg:C.navy,fg:C.white,bold:true,align:"center"}),td("Qty",{bg:C.navy,fg:C.white,bold:true,align:"center"})),
+          ...lines.map((l,i)=>{
+            const bg=i%2===0?C.white:C.off;
+            const ac=catC[l.cat]||C.navy;
+            return tr(
+              td(l.sku,{bg,fg:ac,bold:true}),
+              td(l.desc,{bg}),
+              td(l.cat,{bg:ac,fg:C.white,bold:true,align:"center",sz:9}),
+              td(l.qty,{bg,fg:ac,bold:true,align:"center",sz:11}),
+            );
+          }),
+          tr(td("",{bg:C.navy}),td("TOTAL UNITS",{bg:C.navy,fg:C.white,bold:true,align:"right"}),td("",{bg:C.navy}),td(lines.reduce((s,l)=>s+l.qty,0),{bg:C.navy,fg:C.white,bold:true,align:"center",sz:11})),
+          tr(td("",{colspan:4})),
+          tr(td("PoE Note",{fg:C.sub,bold:true,sz:9}),td(`802.3af ≤15.4W/port · 802.3at ≤30W/port · Project total: ${totalPoe} W`,{fg:C.sub,sz:9,colspan:3})),
+          tr(td("",{colspan:4})),
+          tr(td("Legend",{fg:C.sub,bold:true,sz:9}),td("Category color key",{fg:C.sub,bold:true,sz:9,colspan:3})),
+          ...([
+            {cat:"Camera",col:C.navy,lbl:"Navy — on-prem camera"},
+            {cat:"Recorder",col:C.green,lbl:"Green — FortiRecorder NVR"},
+            {cat:"License",col:C.red,lbl:"Red — cloud license"},
+            {cat:"Accessory",col:C.orange,lbl:"Orange — mount / accessory"},
+          ].map(({cat,col,lbl})=>tr(td(cat,{bg:col,fg:C.white,bold:true,align:"center",sz:9}),td(lbl,{fg:col,sz:9,colspan:3})))),
+        ];
+        const sheet1=`<table>${s1rows.join("")}</table>`;
 
         // ══ Sheet 2 — Camera Detail ════════════════════════════════════════
-        const rows2=[];
-        rows2.push([cell("FortiCamera Planner — Camera Placement Detail","s",true,"FFFFFF",C.navy,"center",12),empty(C.navy),empty(C.navy),empty(C.navy),empty(C.navy),empty(C.navy),empty(C.navy)]);
-        rows2.push([hdrCell("Label"),hdrCell("Model"),hdrCell("Camera Name"),hdrCell("Building"),hdrCell("Floor"),hdrCell("Zone / Location"),hdrCell("Rotation")]);
-        allCams.forEach((c,i)=>{
-          const d=CAMERA_DB.find(x=>x.model===c.model);
-          const bg=i%2===0?C.white:C.off;
-          const tc=d?.cloudOnly?C.red:C.navy;
-          rows2.push([
-            cell(c.label,"s",true,tc,bg,"left"),
-            cell(c.model,"s",true,tc,bg,"left"),
-            cell(d?d.name:c.model,"s",false,"000000",bg,"left"),
-            cell(c.bName,"s",false,"000000",bg,"left"),
-            cell(c.fName,"s",false,"000000",bg,"left"),
-            cell(c.location||"—","s",false,C.sub,bg,"left"),
-            cell(c.rotation+"°","s",false,C.sub,bg,"center"),
-          ]);
-        });
-        rows2.push([empty(),empty(),empty(),empty(),empty(),empty(),empty()]);
-        rows2.push([cell("☁ Cloud-only SKUs shown in red  ·  🖥 On-prem SKUs shown in navy","s",false,C.sub,"FFFFFF","left",9),empty(),empty(),empty(),empty(),empty(),empty()]);
+        const s2rows=[
+          tr(td("FortiCamera Planner — Camera Placement Detail",{bg:C.navy,fg:C.white,bold:true,align:"center",sz:12,colspan:7})),
+          tr(...["Label","Model","Camera Name","Building","Floor","Zone / Location","Rotation"].map(h=>td(h,{bg:C.navy,fg:C.white,bold:true,align:"center"}))),
+          ...allCams.map((c,i)=>{
+            const d=CAMERA_DB.find(x=>x.model===c.model);
+            const bg=i%2===0?C.white:C.off;
+            const tc=d?.cloudOnly?C.red:C.navy;
+            return tr(
+              td(c.label,{bg,fg:tc,bold:true}),
+              td(c.model,{bg,fg:tc,bold:true}),
+              td(d?d.name:c.model,{bg}),
+              td(c.bName,{bg}),
+              td(c.fName,{bg}),
+              td(c.location||"—",{bg,fg:C.sub}),
+              td(c.rotation+"°",{bg,fg:C.sub,align:"center"}),
+            );
+          }),
+          tr(td("",{colspan:7})),
+          tr(td("Cloud-only SKUs shown in red  ·  On-prem SKUs shown in navy",{fg:C.sub,sz:9,colspan:7})),
+        ];
+        const sheet2=`<table>${s2rows.join("")}</table>`;
 
-        const ws2=XLSX.utils.aoa_to_sheet(rows2);
-        ws2["!cols"]=[{wch:9},{wch:18},{wch:28},{wch:18},{wch:14},{wch:24},{wch:10}];
-        ws2["!merges"]=[{s:{r:0,c:0},e:{r:0,c:6}}];
-        XLSX.utils.book_append_sheet(wb,ws2,"Camera Detail");
+        // ── Multi-sheet HTML workbook ─────────────────────────────────────
+        const html=`<html xmlns:o="urn:schemas-microsoft-com:office:office"
+          xmlns:x="urn:schemas-microsoft-com:office:excel"
+          xmlns="http://www.w3.org/TR/REC-html40">
+<head><meta charset="UTF-8">
+<!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets>
+<x:ExcelWorksheet><x:Name>BOM Summary</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet>
+<x:ExcelWorksheet><x:Name>Camera Detail</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet>
+</x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]-->
+</head><body>
+<div id="BOM_Summary">${sheet1}</div>
+<div id="Camera_Detail" style="page-break-before:always">${sheet2}</div>
+</body></html>`;
 
-        // ── Write & trigger download ──────────────────────────────────────
-        const binaryStr=XLSX.write(wb,{bookType:"xlsx",type:"binary",cellStyles:true});
-        const u8=new Uint8Array(binaryStr.length);
-        for(let i=0;i<binaryStr.length;i++)u8[i]=binaryStr.charCodeAt(i)&0xFF;
-        const blob=new Blob([u8],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+        const blob=new Blob([html],{type:"application/vnd.ms-excel;charset=UTF-8"});
         const a=document.createElement("a");
         a.href=URL.createObjectURL(blob);
-        a.download="BOM_"+project.name.replace(/\s+/g,"_")+".xlsx";
+        a.download="BOM_"+project.name.replace(/\s+/g,"_")+".xls";
         a.click();
-      }}>📊 Export BOM (.xlsx)</button>
+      }}>📊 Export BOM (.xls)</button>
     </div>
   </div>
 </div>}
