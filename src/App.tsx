@@ -1775,7 +1775,6 @@ export default function App(){
             return(<>
               <input type="file" accept="image/*" ref={fileRef} style={{display:"none"}} onChange={handleUpload}/>
               <Btn icon="📂" label="Upload" onClick={()=>fileRef.current.click()} title="Upload floor plan"/>
-              {activeF?.img&&<Btn icon="🖨" label="PDF" onClick={exportPDF} title="Export PDF"/>}
               <Div/>
               {/* Scale */}
               {!ppf
@@ -2675,6 +2674,7 @@ export default function App(){
         a.download="BOM_"+project.name.replace(/\s+/g,"_")+".xls";
         a.click();
       }}>📊 Export BOM (.xls)</button>
+      <button style={{...S.btn("red"),width:"100%",padding:"8px",fontSize:12,marginTop:4}} onClick={exportPDF}>🖨 Export PDF (all floors + BOM)</button>
     </div>
   </div>
 </div>}
