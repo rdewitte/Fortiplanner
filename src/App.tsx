@@ -31,9 +31,9 @@ const CAMERA_DB = [
     faceQ:{day:{"2":100,"5":96,"10":82,"15":62,"20":42},night:{"2":88,"5":76,"10":60,"15":40,"20":20}}, lprQ:{day:{"5":96,"10":84,"20":68,"30":48,"40":22},night:{"5":82,"10":66,"20":48,"30":28,"40":10}} },
   { model:"FCM-MC51",    sku:"FCM-MC51",    name:"FortiCamera MC51",    cloudOnly:false, type:"Indoor Mini-Cube",        resolution:"5MP",     fov:103, irRange:8,  poeStd:"802.3af", poeBudget:13, color:FT.grayDark, desc:"5MP mini-cube, 2.0mm fixed",
     faceQ:{day:{"2":100,"5":92,"8":75,"12":52,"20":25},night:{"2":82,"5":68,"8":48,"12":28,"20":10}}, lprQ:{day:{"5":90,"10":72,"15":48,"20":28,"30":10},night:{"5":75,"10":55,"15":32,"20":15,"30":5}} },
-  { model:"FCM-FE120B",  sku:"FCM-FE120B",  name:"FortiCamera FE120B",  cloudOnly:false, type:"Fisheye",                 resolution:"12MP/9MP",fov:360, irRange:20, poeStd:"802.3at", poeBudget:22, color:FT.grayDark, desc:"12MP fisheye, 1.22mm, IP66/IK10",
+  { model:"FCM-FE120B",  sku:"FCM-FE120B",  name:"FortiCamera FE120B",  cloudOnly:false, type:"Fisheye",                 resolution:"12MP/9MP",fov:360, irRange:20, poeStd:"802.3at", poeBudget:13, color:FT.grayDark, desc:"12MP fisheye, 1.22mm, IP66/IK10",
     faceQ:{day:{"2":95,"4":78,"6":58,"8":38,"10":20},night:{"2":75,"4":55,"6":35,"8":18,"10":8}}, lprQ:{day:{"2":85,"4":65,"6":45,"8":25,"10":10},night:{"2":65,"4":45,"6":25,"8":10,"10":3}} },
-  { model:"FCM-FE120B-CA", sku:"FCM-FE120B-CA", name:"FortiCamera FE120B-CA", cloudOnly:true, type:"AI Fisheye",             resolution:"12MP",    fov:360, irRange:20, poeStd:"802.3at", poeBudget:22, color:FT.red, desc:"12MP AI fisheye, 1.22mm, built-in analytics, IP66/IK10, 1TB SD",
+  { model:"FCM-FE120B-CA", sku:"FCM-FE120B-CA", name:"FortiCamera FE120B-CA", cloudOnly:true, type:"AI Fisheye",             resolution:"12MP",    fov:360, irRange:20, poeStd:"802.3at", poeBudget:13, color:FT.red, desc:"12MP AI fisheye, 1.22mm, built-in analytics, IP66/IK10, 1TB SD",
     faceQ:{day:{"2":98,"4":85,"6":68,"8":48,"10":28},night:{"2":82,"4":65,"6":45,"8":25,"10":12}}, lprQ:{day:{"2":90,"4":72,"6":52,"8":32,"10":15},night:{"2":72,"4":52,"6":32,"8":15,"10":5}} },
 ];
 
@@ -62,6 +62,21 @@ const ACCESSORIES_DB = [
 
 
 
+// Bitrate reference: Mbps per camera by resolution & codec (typical Fortinet defaults)
+// Formula: Daily GB = Bitrate × 3600 × recHours × (motionPct/100) / 8 / 1024
+const CAM_BITRATE = {
+  "5MP":{"H.264":4.0,"H.265":2.5},
+  "8MP":{"H.264":8.0,"H.265":5.0},
+  "12MP":{"H.264":12.0,"H.265":7.0},
+  "12MP/9MP":{"H.264":12.0,"H.265":7.0}, // fisheye — use 12MP value
+};
+// SD card sizes per cloud camera model (GB)
+const CAM_SD = {
+  "FCM-MC51-C":512,"FCM-CD51-C":512,"FCM-CD55-C":512,
+  "FCM-FD55-CA":512,"FCM-FB85-CA":1024,"FCM-FE120B-CA":1024,
+};
+// Idle background upload bandwidth per cloud camera (Mbps) — metadata + thumbnail
+const CAM_IDLE_BW = 0.8;
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const qColor=v=>v>=80?FT.green:v>=60?"#8BC34A":v>=40?FT.orange:v>=20?"#FF6B35":FT.red;
 const qLabel=v=>v>=80?"Excellent":v>=60?"Good":v>=40?"Fair":v>=20?"Poor":"Unusable";
@@ -863,6 +878,13 @@ export default function App(){
   const [bomAcc,setBomAcc]=useState({});
   const [licenseYears,setLicenseYears]=useState(1);
   const [selRec,setSelRec]=useState("");
+  // Sizing tab state
+  const [sizMode,setSizMode]=useState("cloud"); // "cloud" | "onprem"
+  const [sizCodec,setSizCodec]=useState("H.265");
+  const [sizMotion,setSizMotion]=useState(20); // % motion
+  const [sizHours,setSizHours]=useState(24);   // recording hours/day
+  const [sizHddTb,setSizHddTb]=useState(8);    // on-prem total HDD TB
+  const [sizConcurrent,setSizConcurrent]=useState(1); // live viewers per camera
   const fileRef=useRef(null);
   const projFileRef=useRef(null);
   const nid=useRef(1);
@@ -1663,7 +1685,7 @@ export default function App(){
     iB:c=>({background:"none",border:"none",cursor:"pointer",color:c||FT.grayMid,fontSize:12,padding:"1px 3px",lineHeight:1}),
     div:{width:1,height:18,background:FT.gray,margin:"0 2px",flexShrink:0},
   };
-  const TABS=[["planner","Floor Plan"],["quality","Quality"],["bom","BOM"]];
+  const TABS=[["planner","Floor Plan"],["quality","Quality"],["bom","BOM"],["sizing","Sizing"]];
 
 
   return(
@@ -2187,6 +2209,269 @@ export default function App(){
 </div>}
 
 {/* ════ BOM TAB ═══════════════════════════════════════════════════════════ */}
+{tab==="sizing"&&(()=>{
+  // ── build per-model summary from allCams ──────────────────────────────
+  const camGroups={};
+  allCams.forEach(c=>{
+    const d=CAMERA_DB.find(x=>x.model===c.model);
+    if(!d)return;
+    if(!camGroups[c.model])camGroups[c.model]={d,count:0};
+    camGroups[c.model].count++;
+  });
+  const rows=Object.values(camGroups);
+  const totalCams=allCams.length;
+  const cloudRows=rows.filter(r=>r.d.cloudOnly);
+  const onpremRows=rows.filter(r=>!r.d.cloudOnly);
+
+  // Per-row calculations
+  const calcRow=(r,codec,motionPct,hoursPerDay)=>{
+    const res=r.d.resolution;
+    const brBase=(CAM_BITRATE[res]||{"H.264":4,"H.265":2.5})[codec]||2.5;
+    // Daily GB/cam = bitrate(Mbps) × 3600s × hours × motionRatio / 8bits / 1024 MB→GB
+    const dailyGbPerCam=brBase*3600*hoursPerDay*(motionPct/100)/8/1024;
+    return{br:brBase,dailyGbPerCam};
+  };
+
+  // ── BANDWIDTH section ─────────────────────────────────────────────────
+  let totalIdleBw=0, totalLiveBw=0;
+  cloudRows.forEach(r=>{
+    totalIdleBw+=r.count*CAM_IDLE_BW;
+    totalLiveBw+=r.count*sizConcurrent*(CAM_BITRATE[r.d.resolution]||{"H.264":4,"H.265":2.5})[sizCodec];
+  });
+
+  // ── STORAGE section ───────────────────────────────────────────────────
+  // Cloud: SD-card retention per model
+  const cloudStorageRows=cloudRows.map(r=>{
+    const{dailyGbPerCam}=calcRow(r,sizCodec,sizMotion,sizHours);
+    const sdGb=CAM_SD[r.d.model]||512;
+    const retDays=dailyGbPerCam>0?Math.floor(sdGb/dailyGbPerCam):999;
+    return{...r,dailyGbPerCam,sdGb,retDays};
+  });
+  // On-prem: all cameras share the FortiRecorder HDD pool
+  const onpremTotalDailyGb=rows.reduce((sum,r)=>{
+    const{dailyGbPerCam}=calcRow(r,sizCodec,sizMotion,sizHours);
+    return sum+dailyGbPerCam*r.count;
+  },0);
+  const onpremRetDays=onpremTotalDailyGb>0?Math.floor(sizHddTb*1024/onpremTotalDailyGb):999;
+
+  const panS={background:darkMode?"#252535":"#fff",border:"1px solid "+(darkMode?"#3A3A5A":FT.gray),borderRadius:6,padding:10,marginBottom:10};
+  const stS={fontSize:11,fontWeight:800,color:FT.red,textTransform:"uppercase",letterSpacing:1,marginBottom:8,paddingBottom:4,borderBottom:"2px solid "+FT.red};
+  const tblHead={background:FT.navy};
+  const thS={textAlign:"left",padding:"4px 6px",color:FT.white,fontWeight:600,fontSize:10};
+  const tdS=(i)=>({padding:"5px 6px",fontSize:10,background:i%2===0?(darkMode?"#1e1e30":FT.white):(darkMode?"#252535":FT.offWhite),borderBottom:"1px solid "+(darkMode?"#3A3A5A":FT.gray)});
+  const inputS={...S.inp,width:70,padding:"3px 5px",textAlign:"center"};
+  const labelS={fontSize:10,color:FT.textSub,marginRight:4};
+
+  return<div style={{flex:1,overflow:"auto",padding:12}}>
+    {/* header */}
+    <div style={S.panR}>
+      <div style={{fontSize:14,fontWeight:800,color:FT.navy,marginBottom:2}}>📐 Bandwidth &amp; Storage Sizing</div>
+      <div style={{fontSize:11,color:FT.textSub}}>{totalCams} camera{totalCams!==1?"s":""} · {cloudRows.reduce((s,r)=>s+r.count,0)} cloud · {onpremRows.reduce((s,r)=>s+r.count,0)} on-prem</div>
+    </div>
+
+    {/* Global settings */}
+    <div style={{...panS,display:"flex",flexWrap:"wrap",gap:14,alignItems:"center",padding:"8px 12px"}}>
+      <div style={{display:"flex",alignItems:"center",gap:6}}>
+        <span style={{...labelS,fontWeight:700}}>Mode:</span>
+        {[["cloud","☁ Cloud"],["onprem","🖥 On-Prem"]].map(([k,l])=>(
+          <button key={k} onClick={()=>setSizMode(k)}
+            style={{padding:"3px 11px",fontSize:10,fontWeight:700,borderRadius:3,
+              border:"1px solid "+(sizMode===k?FT.red:FT.gray),
+              background:sizMode===k?FT.red:FT.white,
+              color:sizMode===k?FT.white:FT.grayDark,cursor:"pointer"}}>{l}</button>
+        ))}
+      </div>
+      <div style={{display:"flex",alignItems:"center",gap:4}}>
+        <span style={labelS}>Codec:</span>
+        {["H.264","H.265"].map(c=>(
+          <button key={c} onClick={()=>setSizCodec(c)}
+            style={{padding:"3px 10px",fontSize:10,fontWeight:700,borderRadius:3,
+              border:"1px solid "+(sizCodec===c?FT.navy:FT.gray),
+              background:sizCodec===c?FT.navy:FT.white,
+              color:sizCodec===c?FT.white:FT.grayDark,cursor:"pointer"}}>{c}</button>
+        ))}
+      </div>
+      <div style={{display:"flex",alignItems:"center",gap:4}}>
+        <span style={labelS}>Motion %:</span>
+        <input type="number" min={1} max={100} value={sizMotion} onChange={e=>setSizMotion(Math.min(100,Math.max(1,+e.target.value)))} style={inputS}/>
+      </div>
+      <div style={{display:"flex",alignItems:"center",gap:4}}>
+        <span style={labelS}>Rec hrs/day:</span>
+        <input type="number" min={1} max={24} value={sizHours} onChange={e=>setSizHours(Math.min(24,Math.max(1,+e.target.value)))} style={inputS}/>
+      </div>
+      {sizMode==="onprem"&&<div style={{display:"flex",alignItems:"center",gap:4}}>
+        <span style={labelS}>NVR HDD (TB):</span>
+        <input type="number" min={1} max={500} value={sizHddTb} onChange={e=>setSizHddTb(Math.max(1,+e.target.value))} style={inputS}/>
+      </div>}
+      {sizMode==="cloud"&&<div style={{display:"flex",alignItems:"center",gap:4}}>
+        <span style={labelS}>Live viewers/cam:</span>
+        <input type="number" min={0} max={20} value={sizConcurrent} onChange={e=>setSizConcurrent(Math.max(0,+e.target.value))} style={inputS}/>
+      </div>}
+    </div>
+
+    {totalCams===0&&<div style={{...panS,padding:20,textAlign:"center",color:FT.grayMid,fontSize:12}}>
+      No cameras placed yet. Add cameras on the Floor Plan tab to see sizing estimates.
+    </div>}
+
+    {/* ── BANDWIDTH (cloud mode only) ─── */}
+    {sizMode==="cloud"&&totalCams>0&&<div style={panS}>
+      <div style={stS}>☁ Cloud Upload Bandwidth</div>
+      <div style={{fontSize:10,color:FT.textSub,marginBottom:8}}>
+        Idle = continuous background upload (metadata, thumbnails, motion clips). Live = on-demand stream per active viewer.
+      </div>
+      {cloudRows.length===0?<div style={{fontSize:10,color:FT.grayMid}}>No cloud cameras placed.</div>:
+      <table style={{width:"100%",borderCollapse:"collapse",marginBottom:10}}>
+        <thead><tr style={tblHead}>
+          {["Model","Qty","Resolution","Bitrate (Mbps)","Idle Bw (Mbps)","Live Bw ×"+sizConcurrent+"v (Mbps)"].map(h=><th key={h} style={thS}>{h}</th>)}
+        </tr></thead>
+        <tbody>{cloudRows.map((r,i)=>{
+          const br=(CAM_BITRATE[r.d.resolution]||{"H.264":4,"H.265":2.5})[sizCodec]||2.5;
+          const idle=(r.count*CAM_IDLE_BW).toFixed(1);
+          const live=(r.count*sizConcurrent*br).toFixed(1);
+          return<tr key={r.d.model}>
+            {[r.d.name,r.count,r.d.resolution,br.toFixed(1),idle,live].map((v,j)=>(
+              <td key={j} style={{...tdS(i),fontWeight:j===0?600:400,color:j===0?FT.navy:"inherit"}}>{v}</td>
+            ))}
+          </tr>;
+        })}</tbody>
+        <tfoot><tr style={{background:FT.navy}}>
+          <td colSpan={4} style={{...thS,textAlign:"right"}}>Total</td>
+          <td style={thS}>{totalIdleBw.toFixed(1)} Mbps</td>
+          <td style={thS}>{totalLiveBw.toFixed(1)} Mbps</td>
+        </tr></tfoot>
+      </table>}
+      <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+        {[["Total Idle Upload",totalIdleBw.toFixed(1)+" Mbps",FT.navy],
+          ["Peak Live Streams ("+sizConcurrent+" viewer/cam)",(totalIdleBw+totalLiveBw).toFixed(1)+" Mbps",FT.red],
+          ["Recommended WAN",(Math.ceil((totalIdleBw+totalLiveBw)*1.3*10)/10).toFixed(1)+" Mbps",FT.orange]
+        ].map(([label,val,col])=>(
+          <div key={label} style={{flex:1,minWidth:120,background:FT.offWhite,borderRadius:5,padding:"8px 12px",borderLeft:"4px solid "+col}}>
+            <div style={{fontSize:9,color:FT.textSub,fontWeight:600,textTransform:"uppercase",letterSpacing:0.5}}>{label}</div>
+            <div style={{fontSize:18,fontWeight:800,color:col,marginTop:2}}>{val}</div>
+          </div>
+        ))}
+      </div>
+    </div>}
+
+    {/* ── CLOUD STORAGE (SD card retention) ─── */}
+    {sizMode==="cloud"&&totalCams>0&&<div style={panS}>
+      <div style={stS}>☁ Cloud — SD Card Retention per Camera</div>
+      <div style={{fontSize:10,color:FT.textSub,marginBottom:8}}>
+        Formula: Daily GB/cam = Bitrate × {sizHours}h × {sizMotion}% motion ÷ 8 ÷ 1024 · Retention = SD size ÷ Daily GB
+      </div>
+      {cloudRows.length===0?<div style={{fontSize:10,color:FT.grayMid}}>No cloud cameras placed.</div>:
+      <table style={{width:"100%",borderCollapse:"collapse"}}>
+        <thead><tr style={tblHead}>
+          {["Model","Qty","Resolution","Bitrate","SD Card","Daily GB/cam","Retention (days)"].map(h=><th key={h} style={thS}>{h}</th>)}
+        </tr></thead>
+        <tbody>{cloudStorageRows.map((r,i)=>(
+          <tr key={r.d.model}>
+            <td style={{...tdS(i),fontWeight:600,color:FT.navy}}>{r.d.name}</td>
+            <td style={tdS(i)}>{r.count}</td>
+            <td style={tdS(i)}>{r.d.resolution}</td>
+            <td style={tdS(i)}>{((CAM_BITRATE[r.d.resolution]||{"H.264":4,"H.265":2.5})[sizCodec]||2.5).toFixed(1)} Mbps</td>
+            <td style={tdS(i)}>{r.sdGb>=1024?(r.sdGb/1024)+"TB":r.sdGb+"GB"}</td>
+            <td style={tdS(i)}>{r.dailyGbPerCam.toFixed(2)} GB</td>
+            <td style={{...tdS(i),fontWeight:700,color:r.retDays>=14?FT.green:r.retDays>=7?FT.orange:FT.red}}>{r.retDays} days</td>
+          </tr>
+        ))}</tbody>
+      </table>}
+    </div>}
+
+    {/* ── ON-PREM BANDWIDTH ─── */}
+    {sizMode==="onprem"&&totalCams>0&&<div style={panS}>
+      <div style={stS}>🖥 On-Prem Network Bandwidth</div>
+      <div style={{fontSize:10,color:FT.textSub,marginBottom:8}}>
+        LAN bandwidth from cameras to FortiRecorder (does not consume WAN).
+      </div>
+      <table style={{width:"100%",borderCollapse:"collapse",marginBottom:10}}>
+        <thead><tr style={tblHead}>
+          {["Model","Qty","Resolution","Bitrate/cam","Total (Mbps)"].map(h=><th key={h} style={thS}>{h}</th>)}
+        </tr></thead>
+        <tbody>{rows.map((r,i)=>{
+          const br=(CAM_BITRATE[r.d.resolution]||{"H.264":4,"H.265":2.5})[sizCodec]||2.5;
+          const total=(r.count*br).toFixed(1);
+          return<tr key={r.d.model}>
+            <td style={{...tdS(i),fontWeight:600,color:r.d.cloudOnly?FT.red:FT.navy}}>{r.d.name}</td>
+            <td style={tdS(i)}>{r.count}</td>
+            <td style={tdS(i)}>{r.d.resolution}</td>
+            <td style={tdS(i)}>{br.toFixed(1)} Mbps</td>
+            <td style={{...tdS(i),fontWeight:700}}>{total} Mbps</td>
+          </tr>;
+        })}</tbody>
+        <tfoot><tr style={{background:FT.navy}}>
+          <td colSpan={4} style={{...thS,textAlign:"right"}}>Total LAN</td>
+          <td style={thS}>{rows.reduce((s,r)=>s+r.count*((CAM_BITRATE[r.d.resolution]||{"H.264":4,"H.265":2.5})[sizCodec]||2.5),0).toFixed(1)} Mbps</td>
+        </tr></tfoot>
+      </table>
+    </div>}
+
+    {/* ── ON-PREM STORAGE (FortiRecorder HDD) ─── */}
+    {sizMode==="onprem"&&totalCams>0&&<div style={panS}>
+      <div style={stS}>🖥 On-Prem — FortiRecorder Retention</div>
+      <div style={{fontSize:10,color:FT.textSub,marginBottom:8}}>
+        All cameras share the NVR HDD pool. Formula: Daily GB = Bitrate × {sizHours}h × {sizMotion}% motion ÷ 8 ÷ 1024
+      </div>
+      <table style={{width:"100%",borderCollapse:"collapse",marginBottom:10}}>
+        <thead><tr style={tblHead}>
+          {["Model","Qty","Resolution","Bitrate/cam","Daily GB/cam","Daily GB total"].map(h=><th key={h} style={thS}>{h}</th>)}
+        </tr></thead>
+        <tbody>{rows.map((r,i)=>{
+          const{br,dailyGbPerCam}=calcRow(r,sizCodec,sizMotion,sizHours);
+          return<tr key={r.d.model}>
+            <td style={{...tdS(i),fontWeight:600,color:r.d.cloudOnly?FT.red:FT.navy}}>{r.d.name}</td>
+            <td style={tdS(i)}>{r.count}</td>
+            <td style={tdS(i)}>{r.d.resolution}</td>
+            <td style={tdS(i)}>{br.toFixed(1)} Mbps</td>
+            <td style={tdS(i)}>{dailyGbPerCam.toFixed(2)} GB</td>
+            <td style={{...tdS(i),fontWeight:700}}>{(dailyGbPerCam*r.count).toFixed(1)} GB</td>
+          </tr>;
+        })}</tbody>
+        <tfoot><tr style={{background:FT.navy}}>
+          <td colSpan={5} style={{...thS,textAlign:"right"}}>Total daily</td>
+          <td style={thS}>{onpremTotalDailyGb.toFixed(1)} GB</td>
+        </tr></tfoot>
+      </table>
+      <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+        {[["NVR HDD Capacity",sizHddTb+" TB",FT.navy],
+          ["Daily Storage Used",onpremTotalDailyGb.toFixed(1)+" GB",FT.grayDark],
+          ["Estimated Retention",onpremRetDays+" days",onpremRetDays>=30?FT.green:onpremRetDays>=14?FT.orange:FT.red]
+        ].map(([label,val,col])=>(
+          <div key={label} style={{flex:1,minWidth:120,background:FT.offWhite,borderRadius:5,padding:"8px 12px",borderLeft:"4px solid "+col}}>
+            <div style={{fontSize:9,color:FT.textSub,fontWeight:600,textTransform:"uppercase",letterSpacing:0.5}}>{label}</div>
+            <div style={{fontSize:18,fontWeight:800,color:col,marginTop:2}}>{val}</div>
+          </div>
+        ))}
+      </div>
+    </div>}
+
+    {/* ── PER-CAMERA DETAIL (collapsible info) ─── */}
+    {totalCams>0&&<div style={panS}>
+      <div style={stS}>📊 Camera Bitrate Reference</div>
+      <table style={{width:"100%",borderCollapse:"collapse"}}>
+        <thead><tr style={tblHead}>
+          {["Resolution","H.264 Mbps","H.265 Mbps","Note"].map(h=><th key={h} style={thS}>{h}</th>)}
+        </tr></thead>
+        <tbody>{[
+          ["5MP","4.0","2.5","Standard dome/bullet/cube"],
+          ["8MP","8.0","5.0","High-res AI bullet (FB85-CA)"],
+          ["12MP","12.0","7.0","Fisheye (FE120B / FE120B-CA)"],
+        ].map(([res,h264,h265,note],i)=>(
+          <tr key={res}>
+            <td style={{...tdS(i),fontWeight:700}}>{res}</td>
+            <td style={tdS(i)}>{h264}</td>
+            <td style={{...tdS(i),color:FT.green,fontWeight:600}}>{h265}</td>
+            <td style={{...tdS(i),color:FT.textSub}}>{note}</td>
+          </tr>
+        ))}</tbody>
+      </table>
+      <div style={{fontSize:9,color:FT.grayMid,marginTop:6}}>
+        Bitrates are typical values at medium quality. Actual rates depend on scene complexity, motion level, and camera settings. Motion %: percentage of time cameras record at full bitrate vs. idle background rate.
+      </div>
+    </div>}
+  </div>;
+})()}
+
 {tab==="bom"&&<div style={{flex:1,overflow:"auto",padding:12}}>
   <div style={S.panR}><div style={{fontSize:14,fontWeight:800,color:FT.navy,marginBottom:2}}>Bill of Materials &amp; Quote</div>
     <div style={{fontSize:11,color:FT.textSub}}>{project.buildings.length} building(s) · {allCams.length} cameras · {totalPoe}W PoE</div></div>
