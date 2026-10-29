@@ -1815,7 +1815,7 @@ export default function App(){
     iB:c=>({background:"none",border:"none",cursor:"pointer",color:c||FT.grayMid,fontSize:12,padding:"1px 3px",lineHeight:1}),
     div:{width:1,height:18,background:FT.gray,margin:"0 2px",flexShrink:0},
   };
-  const TABS=[["planner","Floor Plan"],["quality","Quality"],["bom","BOM"],["sizing","Sizing"],["comparison","Comparison"]];
+  const TABS=[["planner","Floor Plan"],["quality","Quality"],["bom","BOM"],["sizing","Sizing"],["comparison","Comparison"],["info","Info"]];
 
 
   return(
@@ -3244,6 +3244,111 @@ export default function App(){
     </div>
   </div>;
 })()}
+
+{tab==="info"&&<div style={{flex:1,overflow:"auto",padding:16,maxWidth:800,margin:"0 auto",width:"100%"}}>
+
+  {/* Header */}
+  <div style={{marginBottom:20}}>
+    <div style={{fontSize:16,fontWeight:800,color:DM.text,marginBottom:4}}>ℹ FortiCamera Planner — Feature Reference</div>
+    <div style={{fontSize:12,color:DM.muted}}>Quick guide to tools, handles, and how coverage quality is calculated.</div>
+  </div>
+
+  {/* Range Handle section */}
+  <div style={{...S.pan,marginBottom:12}}>
+    <div style={S.st}>◇ Draggable Range Handle</div>
+    <div style={{fontSize:12,color:DM.textSub,lineHeight:1.6,marginBottom:10}}>
+      When a directional camera is selected on the floor plan, a <strong style={{color:DM.text}}>◇ diamond handle</strong> appears at the tip of the FOV cone.
+      Drag it along the camera's aim direction to set the effective IR coverage distance.
+      The cone color updates live based on coverage quality relative to the camera's rated IR spec.
+    </div>
+    <ol style={{paddingLeft:18,fontSize:12,color:DM.textSub,lineHeight:1.8}}>
+      <li><strong style={{color:DM.text}}>Set floor scale first</strong> — click the ruler, mark two points, enter the real-world distance. Without a scale the distance label shows "drag to set range."</li>
+      <li><strong style={{color:DM.text}}>Select a camera</strong> — click any camera on the canvas.</li>
+      <li><strong style={{color:DM.text}}>Drag the ◇ handle</strong> — only forward/backward motion along the aim line adjusts the range; sideways drag has no effect.</li>
+      <li><strong style={{color:DM.text}}>Read the label</strong> — a bubble shows distance in ft / m and the quality rating.</li>
+      <li><strong style={{color:DM.text}}>Use the sidebar slider</strong> — the camera panel also has a Range slider and a ↺ reset button to restore the camera's default IR spec.</li>
+    </ol>
+  </div>
+
+  {/* Quality thresholds table */}
+  <div style={{...S.pan,marginBottom:12}}>
+    <div style={S.st}>Coverage Quality Thresholds</div>
+    <div style={{fontSize:11,color:DM.muted,marginBottom:8}}>Thresholds are ratios of the current range to the camera's rated IR spec — they apply equally regardless of unit system.</div>
+    <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
+      <thead>
+        <tr style={{background:FT.navy}}>
+          {["Quality","Cone Color","Threshold (% of IR max)","Use Case"].map(h=><th key={h} style={{color:"#fff",padding:"7px 10px",textAlign:"left",fontWeight:600,letterSpacing:"0.04em"}}>{h}</th>)}
+        </tr>
+      </thead>
+      <tbody>
+        {[
+          {q:"● Excellent",c:FT.green, hex:"#00A651",range:"≤ 45%",use:"Entrances, license plates, face ID"},
+          {q:"● Fair",     c:"#C8A800",hex:"#E6C700",range:"46 – 70%",use:"General area coverage, motion detection"},
+          {q:"● Poor",     c:FT.orange,hex:"#F47920",range:"71 – 90%",use:"Silhouette only — overlap recommended"},
+          {q:"● Unusable", c:FT.red,   hex:"#DA291C",range:"> 90%",use:"Night coverage unreliable — re-design"},
+        ].map((r,i)=><tr key={i} style={{borderBottom:`1px solid ${DM.border}`,background:i%2===0?DM.bg:DM.surface}}>
+          <td style={{padding:"8px 10px",fontWeight:700,color:r.c}}>{r.q}</td>
+          <td style={{padding:"8px 10px"}}>
+            <span style={{display:"inline-block",width:12,height:12,borderRadius:3,background:r.hex,verticalAlign:"middle",marginRight:5}}></span>
+            <span style={{fontFamily:"monospace",fontSize:10,color:DM.textSub}}>{r.hex}</span>
+          </td>
+          <td style={{padding:"8px 10px",fontFamily:"monospace",fontSize:11,color:DM.text}}>{r.range}</td>
+          <td style={{padding:"8px 10px",color:DM.textSub}}>{r.use}</td>
+        </tr>)}
+      </tbody>
+    </table>
+  </div>
+
+  {/* Per-model breakpoints */}
+  <div style={{...S.pan,marginBottom:12}}>
+    <div style={S.st}>Range Breakpoints by FortiCamera Model</div>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:10,marginTop:4}}>
+      {[
+        {model:"FCM-MC51-C",    ir:8,  zones:[3.6,5.6,7.2]},
+        {model:"FCM-CD51-C",    ir:20, zones:[9,14,18]},
+        {model:"FCM-FD50/FD51", ir:30, zones:[13.5,21,27]},
+        {model:"FCM-FD55-CA / FB85-CA", ir:50, zones:[22.5,35,45]},
+      ].map(({model,ir,zones})=>(
+        <div key={model} style={{background:DM.bg,border:`1px solid ${DM.border}`,borderRadius:8,padding:"10px 12px"}}>
+          <div style={{fontSize:10,fontWeight:700,color:DM.muted,letterSpacing:"0.04em",marginBottom:2}}>{model}</div>
+          <div style={{fontSize:13,fontWeight:800,fontFamily:"monospace",color:DM.text,marginBottom:6}}>{ir} m / {Math.round(ir*3.281)} ft IR</div>
+          {[
+            {label:"● Excellent",c:FT.green, val:`≤ ${zones[0]} m`},
+            {label:"● Fair",     c:"#C8A800",val:`${zones[0]}–${zones[1]} m`},
+            {label:"● Poor",     c:FT.orange,val:`${zones[1]}–${zones[2]} m`},
+            {label:"● Unusable", c:FT.red,   val:`> ${zones[2]} m`},
+          ].map(z=>(
+            <div key={z.label} style={{display:"flex",justifyContent:"space-between",fontSize:10,marginBottom:2}}>
+              <span style={{color:z.c,fontWeight:600}}>{z.label}</span>
+              <span style={{fontFamily:"monospace",color:DM.text}}>{z.val}</span>
+            </div>
+          ))}
+        </div>
+      ))}
+    </div>
+  </div>
+
+  {/* Tips */}
+  <div style={{...S.pan,marginBottom:12}}>
+    <div style={S.st}>Quick Tips</div>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))",gap:8,marginTop:4}}>
+      {[
+        {t:"Stay in the green",d:"Keep identification-critical zones (entrances, cashiers, exits) at Excellent range — ≤ 45% of IR spec."},
+        {t:"Fair for wide areas",d:"General aisles and lobbies are fine in Fair range — reliable detection, sufficient for incident review."},
+        {t:"Overlap in poor zones",d:"If a zone falls orange, add a second camera or choose a model with a higher IR rating."},
+        {t:"Red = re-design",d:"Red means nighttime coverage is unreliable at that distance. Shorten range or upgrade the camera."},
+        {t:"Custom vs. default",d:'The sidebar shows “(custom)” when the default range is overridden. Reset any time with the ↺ button.'},
+        {t:"Adding competitors",d:'Add entries to the COMP_DB array in App.tsx — one object per model following the existing template.'},
+      ].map(({t,d})=>(
+        <div key={t} style={{background:DM.bg,border:`1px solid ${DM.border}`,borderRadius:8,padding:"10px 12px",fontSize:12}}>
+          <div style={{fontWeight:700,color:DM.text,marginBottom:3}}>{t}</div>
+          <div style={{color:DM.textSub,lineHeight:1.5}}>{d}</div>
+        </div>
+      ))}
+    </div>
+  </div>
+
+</div>}
 
         </div>
       </div>
