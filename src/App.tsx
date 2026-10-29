@@ -2970,11 +2970,43 @@ export default function App(){
      fortinet:"FCM-FE120B-CA", fortiDesc:"12MP AI fisheye, full 360°, IR 20m — 3× higher resolution, adds IR, full 360° vs 180°"},
     {vendor:"Meraki", model:"MV52",       form:"Long-range Bullet",    res:"4K",    fov:37,  ir:50, poe:"at",  ai:true,  cloud:true,  desc:"4K outdoor bullet, cloud-managed, long-range varifocal 12–37°, IR 50m, 1TB onboard",
      fortinet:"FCM-FB85-CA", fortiDesc:"8MP AI bullet, IR 50m — comparable specs, no Meraki licensing cost, FortiCamera Cloud optional"},
+
+    // ── AVIGILON (Motorola Solutions) ─────────────────────────────────────
+    {vendor:"Avigilon",model:"H6SL Dome 2MP",  form:"Indoor/Outdoor Dome",  res:"2MP",   fov:101, ir:30, poe:"af",  ai:true,  cloud:false, desc:"2MP varifocal dome, Alta/Unity platform, IP52 indoor/IP66 outdoor, IR 30m, Avigilon AI analytics",
+     fortinet:"FCM-CD51-C", fortiDesc:"5MP cloud dome, IR 20m — higher resolution, FortiCamera Cloud platform, no Motorola VMS license required"},
+    {vendor:"Avigilon",model:"H6SL Dome 5MP",  form:"Indoor/Outdoor Dome",  res:"5MP",   fov:101, ir:40, poe:"af",  ai:true,  cloud:false, desc:"5MP varifocal dome, Alta/Unity, IP52/IP66, IR 40m (tele), self-learning appearance search",
+     fortinet:"FCM-FD55-CA", fortiDesc:"5MP AI dome, IR 50m — matched resolution, longer IR, Fortinet ecosystem integration vs proprietary ACC/Ava VMS"},
+    {vendor:"Avigilon",model:"H6SL Bullet",    form:"Outdoor Bullet",       res:"2MP",   fov:101, ir:50, poe:"af",  ai:true,  cloud:false, desc:"2MP varifocal bullet, IP66/IP67, IR 50m (tele), IEEE 802.3af, -40°C operating range",
+     fortinet:"FCM-FB85-CA", fortiDesc:"8MP AI bullet, IR 50m — 4× higher resolution, same IR range, FortiCamera Cloud optional, FortiGate integration"},
+    {vendor:"Avigilon",model:"H5A Fisheye 8MP", form:"Fisheye",             res:"8MP",   fov:360, ir:20, poe:"af",  ai:true,  cloud:false, desc:"8MP 360° fisheye, IR 20m variant, IEEE 802.3af, indoor/outdoor, appearance search",
+     fortinet:"FCM-FE120B-CA", fortiDesc:"12MP AI fisheye, IR 20m — 50% higher resolution, same IR, built-in AI + no per-camera Avigilon Cloud license"},
+    {vendor:"Avigilon",model:"H5A Fisheye 12MP",form:"Fisheye",             res:"12MP",  fov:360, ir:0,  poe:"af",  ai:true,  cloud:false, desc:"12MP 360° fisheye, no IR, IEEE 802.3af, appearance search, indoor/outdoor surface mount",
+     fortinet:"FCM-FE120B-CA", fortiDesc:"12MP AI fisheye, adds IR 20m night vision — matched resolution, more complete feature set at lower platform cost"},
+    {vendor:"Avigilon",model:"Ava Dome 5MP",   form:"Outdoor Dome",         res:"5MP",   fov:105, ir:30, poe:"af",  ai:true,  cloud:false, desc:"5MP Ava dome, AI video + audio analytics (4 built-in mics), IP66/IK10, varifocal, cloud-capable",
+     fortinet:"FCM-FD55-CA", fortiDesc:"5MP AI dome, IR 50m — matched resolution, longer IR range, flexible cloud/on-prem deployment without Avigilon Cloud subscription"},
+    {vendor:"Avigilon",model:"H6A PTZ 2MP",    form:"PTZ",                  res:"2MP",   fov:53,  ir:0,  poe:"at",  ai:true,  cloud:false, desc:"2MP PTZ, 30× optical zoom, 360° pan/95° tilt, PoE+, auto-tracking, outdoor IP66/IK10",
+     fortinet:"FCM-FB85-CA", fortiDesc:"Fixed 8MP AI bullet — no PTZ in FortiCamera range; FB85-CA covers wide-area analytics without PTZ complexity"},
+
+    // ── UBIQUITI (UniFi Protect) ───────────────────────────────────────────
+    {vendor:"Ubiquiti", model:"G5 Turret Ultra",form:"Indoor/Outdoor Dome", res:"4MP",   fov:102, ir:30, poe:"af",  ai:true,  cloud:false, desc:"4MP 2K dome, 102° FOV, IR 30m, IP66, tamper-resistant, AI person/vehicle detection, UniFi Protect",
+     fortinet:"FCM-CD51-C", fortiDesc:"5MP cloud dome, IR 20m — higher resolution, enterprise cloud platform vs prosumer UniFi Protect ecosystem"},
+    {vendor:"Ubiquiti", model:"G5 Pro",         form:"Outdoor Dome",        res:"8MP",   fov:110, ir:25, poe:"at",  ai:true,  cloud:false, desc:"8MP 4K dome, 3× optical zoom, IR 25m, IP65, PoE+, AI detection, UniFi Protect cloud option",
+     fortinet:"FCM-FB85-CA", fortiDesc:"8MP AI bullet, IR 50m — matched resolution, longer IR range, enterprise-grade FortiCamera Cloud vs prosumer Ubiquiti stack"},
+    {vendor:"Ubiquiti", model:"G5 Bullet",      form:"Outdoor Bullet",      res:"4MP",   fov:84,  ir:9,  poe:"af",  ai:true,  cloud:false, desc:"4MP bullet, 84° FOV, IR 9m, IP55, 3-axis adjustable, AI detection, UniFi Protect",
+     fortinet:"FCM-FB85-CA", fortiDesc:"8MP AI bullet, IR 50m — 2× resolution, 5× longer IR, enterprise platform vs consumer-grade IP55 rating"},
+    {vendor:"Ubiquiti", model:"G5 Dome Ultra",  form:"Indoor Dome",         res:"4MP",   fov:102, ir:20, poe:"af",  ai:true,  cloud:false, desc:"4MP indoor dome, IR 20m, IK06, AI detection, ceiling mount, flush-mount option, UniFi Protect",
+     fortinet:"FCM-CD51-C", fortiDesc:"5MP cloud dome, IR 20m — higher resolution, same IR range, IK10 vs IK06 impact rating, enterprise management platform"},
+    {vendor:"Ubiquiti", model:"G5 Dome",        form:"Indoor Dome",         res:"4MP",   fov:102, ir:9,  poe:"af",  ai:true,  cloud:false, desc:"4MP ceiling dome, IR 9m, 2-way audio, IPX4, AI detection, compact form factor, UniFi Protect",
+     fortinet:"FCM-MC51-C", fortiDesc:"5MP mini-cube, 103° FOV, IR 8m — higher resolution, same form factor class, enterprise-grade IP67 vs IPX4 splash-only"},
+    {vendor:"Ubiquiti", model:"G5 Flex",        form:"Indoor Mini",         res:"4MP",   fov:102, ir:6,  poe:"af",  ai:true,  cloud:false, desc:"4MP compact cam, 102° FOV, IR 6m, IPX4, flexible mounting, AI detection, budget UniFi tier",
+     fortinet:"FCM-MC51-C", fortiDesc:"5MP mini-cube, 103° FOV, IR 8m — higher resolution, longer IR, true IP67 rating vs IPX4, enterprise cloud platform"},
+    {vendor:"Ubiquiti", model:"G5 PTZ",         form:"PTZ",                 res:"4MP",   fov:100, ir:20, poe:"at",  ai:true,  cloud:false, desc:"4MP PTZ, 2× optical zoom, LED spotlight for color night vision, IP66, auto person tracking, UniFi Protect",
+     fortinet:"FCM-FB85-CA", fortiDesc:"Fixed 8MP AI bullet — no PTZ in FortiCamera range; FB85-CA delivers 2× resolution with wide-area AI analytics"},
   ];
 
-  const vendors=["Axis","Verkada","Meraki"];
-  const vColors={Axis:"#003366",Verkada:"#006EFF",Meraki:"#67B346"};
-  const vBg={Axis:"#E8EFF8",Verkada:"#E6F0FF",Meraki:"#EDF7E6"};
+  const vendors=["Axis","Verkada","Meraki","Avigilon","Ubiquiti"];
+  const vColors={Axis:"#003366",Verkada:"#006EFF",Meraki:"#67B346",Avigilon:"#CC0000",Ubiquiti:"#0069FF"};
+  const vBg={Axis:"#E8EFF8",Verkada:"#E6F0FF",Meraki:"#EDF7E6",Avigilon:"#FDEAEA",Ubiquiti:"#E6F2FF"};
   const forms=[...new Set(COMP_DB.map(c=>c.form.split(" ").pop()))].sort();
   const filtered=COMP_DB.filter(c=>{
     if(cmpVendor!=="All"&&c.vendor!==cmpVendor)return false;
