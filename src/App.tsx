@@ -191,6 +191,7 @@ function FloorCanvas({floor,cameras,annotations,zones,zoneDraft,selCamId,selWall
                       onScalePt1,onScalePt2,onWallClick,onZoneClick,onZoneDblClick,zoneType,
                       scalePt2,
                       onCanvasMouseMove,
+                      onSetCamRange,
                       zoom,panX,panY,onZoom,onPanDelta,onWrapSize}){
   const cvRef=useRef(null);
   const wrapRef=useRef(null);
@@ -213,6 +214,7 @@ function FloorCanvas({floor,cameras,annotations,zones,zoneDraft,selCamId,selWall
   const onMoveCamRef=useRef(onMoveCam);
   const onMoveWallRef=useRef(onMoveWall);
   const onCanvasMouseMoveRef=useRef(onCanvasMouseMove);
+  const onSetCamRangeRef=useRef(onSetCamRange);
   const annotationsRef=useRef(annotations);
   React.useLayoutEffect(()=>{
     modeRef.current=mode;
@@ -227,6 +229,7 @@ function FloorCanvas({floor,cameras,annotations,zones,zoneDraft,selCamId,selWall
     onMoveCamRef.current=onMoveCam;
     onMoveWallRef.current=onMoveWall;
     onCanvasMouseMoveRef.current=onCanvasMouseMove;
+    onSetCamRangeRef.current=onSetCamRange;
   }); // no deps = after every render, before paint
   const floorRef=useRef(floor);
   useEffect(()=>{floorRef.current=floor;},[floor]);
@@ -234,6 +237,8 @@ function FloorCanvas({floor,cameras,annotations,zones,zoneDraft,selCamId,selWall
   const panXRef=useRef(panX); useEffect(()=>{panXRef.current=panX;},[panX]);
   const panYRef=useRef(panY); useEffect(()=>{panYRef.current=panY;},[panY]);
   const camerasRef=useRef(cameras); useEffect(()=>{camerasRef.current=cameras;},[cameras]);
+  const selCamIdRef=useRef(selCamId); useEffect(()=>{selCamIdRef.current=selCamId;},[selCamId]);
+  const ppfRef=useRef(null);
 
   // Canvas resolution:
   // • With image: use natural image dimensions (keeps coordinate precision)
@@ -307,21 +312,33 @@ function FloorCanvas({floor,cameras,annotations,zones,zoneDraft,selCamId,selWall
     }
 
     const ppf=floor.pxPerFt||null;
+    ppfRef.current=ppf;
     const walls=floor.walls||[];
 
     // ── FOV cones ────────────────────────────────────────────────────────────
+    // Range quality: green=excellent, yellow=fair, orange=poor, red=unusable
+    const rangeQualityColor=(rangePx,maxRangePx)=>{
+      if(!maxRangePx||maxRangePx<=0) return "#00A651";
+      const ratio=rangePx/maxRangePx;
+      if(ratio<=0.45) return "#00A651";   // green — excellent
+      if(ratio<=0.70) return "#E6C700";   // yellow — fair
+      if(ratio<=0.90) return "#F47920";   // orange — poor
+      return "#DA291C";                    // red — unusable
+    };
     if(showFov){
       cameras.forEach(cam=>{
         const def=CAMERA_DB.find(d=>d.model===cam.model); if(!def)return;
         const isSel=selCamId===cam.id, isHov=hovCam===cam.id;
-        const range=ppf?def.irRange*3.281*ppf:70;
+        const maxRangePx=ppf?def.irRange*3.281*ppf:70;
+        const range=cam.customRange!=null?cam.customRange:maxRangePx;
         const dirRad=(cam.rotation*Math.PI)/180;
+        const qColor=rangeQualityColor(range,maxRangePx);
         ctx.save();
         if(def.fov>=360){
           const pts=buildVisPolygon(cam.x,cam.y,range,dirRad,Math.PI,walls);
           if(pts.length>2){
             const g=ctx.createRadialGradient(cam.x,cam.y,0,cam.x,cam.y,range);
-            g.addColorStop(0,def.color+"88"); g.addColorStop(1,def.color+"11");
+            g.addColorStop(0,qColor+"88"); g.addColorStop(1,qColor+"11");
             ctx.fillStyle=g; ctx.globalAlpha=0.82;
             ctx.beginPath(); ctx.moveTo(cam.x,cam.y);
             pts.forEach(p=>ctx.lineTo(p.x,p.y));
@@ -329,25 +346,59 @@ function FloorCanvas({floor,cameras,annotations,zones,zoneDraft,selCamId,selWall
           }
         } else {
           const camFov = cam.customFov != null ? cam.customFov : def.fov;
-        const halfFov=(camFov*Math.PI)/180/2;
+          const halfFov=(camFov*Math.PI)/180/2;
           const visPts=buildVisPolygon(cam.x,cam.y,range,dirRad,halfFov,walls);
           // Ghost (full unobstructed cone)
-          ctx.globalAlpha=0.09; ctx.fillStyle=def.color;
+          ctx.globalAlpha=0.09; ctx.fillStyle=qColor;
           ctx.beginPath(); ctx.moveTo(cam.x,cam.y);
-          ctx.arc(cam.x,cam.y,range,dirRad-halfFov,dirRad+halfFov); // ghost uses camFov via halfFov
+          ctx.arc(cam.x,cam.y,range,dirRad-halfFov,dirRad+halfFov);
           ctx.closePath(); ctx.fill();
           // Visible polygon
           if(visPts.length>1){
             const g=ctx.createRadialGradient(cam.x,cam.y,0,cam.x,cam.y,range);
-            g.addColorStop(0,def.color+(isSel?"CC":"88"));
-            g.addColorStop(0.5,def.color+(isSel?"77":"55"));
-            g.addColorStop(1,def.color+"11");
+            g.addColorStop(0,qColor+(isSel?"CC":"88"));
+            g.addColorStop(0.5,qColor+(isSel?"77":"55"));
+            g.addColorStop(1,qColor+"11");
             ctx.fillStyle=g; ctx.globalAlpha=isSel||isHov?1:0.9;
             ctx.beginPath(); ctx.moveTo(cam.x,cam.y);
             visPts.forEach(p=>ctx.lineTo(p.x,p.y));
             ctx.closePath(); ctx.fill();
-            ctx.globalAlpha=0.5; ctx.strokeStyle=def.color; ctx.lineWidth=1.2/zoom;
+            ctx.globalAlpha=0.5; ctx.strokeStyle=qColor; ctx.lineWidth=1.2/zoom;
             ctx.stroke();
+          }
+          // ── Range handle (diamond) at cone tip — only for selected cam ──
+          if(isSel){
+            const hx=cam.x+Math.cos(dirRad)*range;
+            const hy=cam.y+Math.sin(dirRad)*range;
+            const hs=8/zoom;
+            // Distance label above handle
+            const distFt=ppf?(range/ppf).toFixed(1)+"ft / "+(range/ppf/3.281).toFixed(1)+"m":"drag to set range";
+            const qualLabel=range<=maxRangePx*0.45?"● Excellent":range<=maxRangePx*0.70?"● Fair":range<=maxRangePx*0.90?"● Poor":"● Unusable";
+            const fullLabel=distFt+" — "+qualLabel;
+            ctx.save();
+            ctx.font=`bold ${9/zoom}px Inter,sans-serif`;
+            const tw=ctx.measureText(fullLabel).width;
+            const lx=hx-tw/2, ly=hy-hs-8/zoom;
+            ctx.fillStyle="rgba(26,26,46,0.88)";
+            ctx.beginPath();
+            ctx.roundRect?ctx.roundRect(lx-3/zoom,ly-9/zoom,tw+6/zoom,13/zoom,3/zoom):ctx.rect(lx-3/zoom,ly-9/zoom,tw+6/zoom,13/zoom);
+            ctx.fill();
+            ctx.fillStyle=qColor;
+            ctx.fillText(fullLabel,lx,ly+1/zoom);
+            ctx.restore();
+            // Diamond handle
+            ctx.save();
+            ctx.fillStyle=qColor;
+            ctx.strokeStyle=FT.white;
+            ctx.lineWidth=1.5/zoom;
+            ctx.beginPath();
+            ctx.moveTo(hx, hy-hs);
+            ctx.lineTo(hx+hs, hy);
+            ctx.lineTo(hx, hy+hs);
+            ctx.lineTo(hx-hs, hy);
+            ctx.closePath();
+            ctx.fill(); ctx.stroke();
+            ctx.restore();
           }
         }
         ctx.restore();
@@ -697,6 +748,25 @@ function FloorCanvas({floor,cameras,annotations,zones,zoneDraft,selCamId,selWall
       return;
     }
 
+    // Range handle hit-test (only for selected cam in camera mode)
+    const selCamForHandle=selCamIdRef.current?camerasRef.current.find(c=>c.id===selCamIdRef.current):null;
+    if(selCamForHandle){
+      const def=CAMERA_DB.find(d=>d.model===selCamForHandle.model);
+      if(def&&def.fov<360){
+        const ppfNow=ppfRef.current;
+        const maxRangePx=ppfNow?def.irRange*3.281*ppfNow:70;
+        const range=selCamForHandle.customRange!=null?selCamForHandle.customRange:maxRangePx;
+        const dirRad=(selCamForHandle.rotation*Math.PI)/180;
+        const hx=selCamForHandle.x+Math.cos(dirRad)*range;
+        const hy=selCamForHandle.y+Math.sin(dirRad)*range;
+        const htol=12/zoomRef.current;
+        if(Math.hypot(ip.x-hx,ip.y-hy)<htol){
+          dragState.current={type:"range",id:selCamForHandle.id};
+          return;
+        }
+      }
+    }
+
     const camTol=18/zoomRef.current;
     const h=camerasRef.current.find(c=>Math.hypot(c.x-ip.x,c.y-ip.y)<camTol);
     if(h){
@@ -719,6 +789,18 @@ function FloorCanvas({floor,cameras,annotations,zones,zoneDraft,selCamId,selWall
       const scaleX=IW/r.width, scaleY=IH/r.height;
       onPanDelta(dx*scaleX, dy*scaleY);
       panState.current={startX:e.clientX,startY:e.clientY};
+      return;
+    }
+
+    // Drag range handle
+    if(dragState.current?.type==="range"){
+      const ds=dragState.current;
+      const cam=camerasRef.current.find(c=>c.id===ds.id); if(!cam) return;
+      const dirRad=(cam.rotation*Math.PI)/180;
+      const dx=ip.x-cam.x, dy=ip.y-cam.y;
+      // Project mouse onto direction vector
+      const newRange=Math.max(20/zoomRef.current, dx*Math.cos(dirRad)+dy*Math.sin(dirRad));
+      onSetCamRangeRef.current(ds.id, newRange);
       return;
     }
 
@@ -780,6 +862,7 @@ function FloorCanvas({floor,cameras,annotations,zones,zoneDraft,selCamId,selWall
   const getCursor=()=>{
     const m=modeRef.current;
     if(panState.current)return"grabbing";
+    if(dragState.current?.type==="range")return"ns-resize";
     if(m==="scale"||m==="scale2"||m==="wall")return"crosshair";
     if(m==="wall_edit"){if(hovWall)return hovWall.part==="body"?"move":"crosshair"; return"default";}
     if(hovCam)return"grab";
@@ -2208,6 +2291,7 @@ export default function App(){
         setWallDraft(null);
       }}
       onCanvasMouseMove={setMousePos}
+      onSetCamRange={(id,rangePx)=>updCams(cs=>{const c=cs.find(c=>c.id===id);if(c)c.customRange=rangePx;})}
       zoneType={zoneType}
       zoom={zoom} panX={panX} panY={panY}
       onZoom={handleZoom}
@@ -2258,6 +2342,29 @@ export default function App(){
         <input type="range" min={20} max={360} value={selCam.customFov != null ? selCam.customFov : selDef.fov}
           onChange={e=>updCam("customFov",+e.target.value)}
           style={{width:"100%",marginBottom:5,accentColor:FT.orange}}/>
+        {(()=>{
+          const maxRangePx=ppf?selDef.irRange*3.281*ppf:null;
+          const curRangePx=selCam.customRange!=null?selCam.customRange:maxRangePx;
+          const curRangeFt=ppf&&curRangePx!=null?(curRangePx/ppf).toFixed(1):null;
+          const maxRangeFt=ppf&&selDef.irRange?(selDef.irRange*3.281).toFixed(1):null;
+          const qColor=maxRangePx&&curRangePx?(curRangePx/maxRangePx<=0.45?"#00A651":curRangePx/maxRangePx<=0.70?"#E6C700":curRangePx/maxRangePx<=0.90?FT.orange:FT.red):FT.green;
+          const qLabel=maxRangePx&&curRangePx?(curRangePx/maxRangePx<=0.45?"Excellent":curRangePx/maxRangePx<=0.70?"Fair":curRangePx/maxRangePx<=0.90?"Poor":"Unusable"):"—";
+          return(<>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:2}}>
+              <div style={S.lbl} style={{marginBottom:0}}>
+                Range{curRangeFt?`: ${curRangeFt}ft`:""}{maxRangeFt?` / max ${maxRangeFt}ft`:""}&nbsp;
+                <span style={{color:qColor,fontWeight:700,fontSize:8}}>{qLabel}</span>
+                {selCam.customRange!=null&&<span style={{color:FT.orange,fontSize:8}}> (custom)</span>}
+              </div>
+              {selCam.customRange!=null&&<button style={{...S.iB(FT.grayMid),fontSize:9}} onClick={()=>updCam("customRange",null)} title="Reset to default">↺</button>}
+            </div>
+            {maxRangePx!=null?<input type="range" min={Math.round(maxRangePx*0.05)} max={Math.round(maxRangePx*1.5)}
+              value={curRangePx!=null?Math.round(curRangePx):Math.round(maxRangePx)}
+              onChange={e=>updCam("customRange",+e.target.value)}
+              style={{width:"100%",marginBottom:5,accentColor:qColor}}/>
+            :<div style={{fontSize:9,color:FT.grayMid,marginBottom:5}}>Set scale to enable range control · drag ◇ handle on cone</div>}
+          </>);
+        })()}
         <div style={S.lbl}>Notes</div>
         <textarea style={{...S.inp,height:42,resize:"none",marginBottom:6}} value={selCam.notes} onChange={e=>updCam("notes",e.target.value)} placeholder="Mount height…"/>
         <div style={{display:"flex",gap:6,marginTop:1}}>
