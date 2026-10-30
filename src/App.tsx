@@ -3109,11 +3109,29 @@ export default function App(){
      fortinet:"FCM-MC51-C", fortiDesc:"5MP mini-cube, 103° FOV, IR 8m — higher resolution, longer IR, true IP67 rating vs IPX4, enterprise cloud platform"},
     {vendor:"Ubiquiti", model:"G5 PTZ",         form:"PTZ",                 res:"4MP",   fov:100, ir:20, poe:"at",  ai:true,  cloud:false, desc:"4MP PTZ, 2× optical zoom, LED spotlight for color night vision, IP66, auto person tracking, UniFi Protect",
      fortinet:"FCM-FB85-CA", fortiDesc:"Fixed 8MP AI bullet — no PTZ in FortiCamera range; FB85-CA delivers 2× resolution with wide-area AI analytics"},
+
+    // ── Hikvision ───────────────────────────────────────────────────────────
+    {vendor:"Hikvision", model:"DS-2CD2143G2-I",    form:"Outdoor Dome",         res:"4MP",   fov:103, ir:40, poe:"af",  ai:false, cloud:false, desc:"4MP AcuSense dome, IR 40m, IP67/IK10, H.265+, false alarm filtering via deep learning",
+     fortinet:"FCM-FD51-A",  fortiDesc:"5MP AI dome, IR 30m, FortiCamera Cloud — comparable AcuSense analytics with cloud-managed unified platform vs Hikvision standalone"},
+    {vendor:"Hikvision", model:"DS-2CD2T47G2-L",    form:"Outdoor Bullet",       res:"4MP",   fov:100, ir:60, poe:"af",  ai:false, cloud:false, desc:"4MP ColorVu bullet, white-light + IR 60m, 24/7 color, H.265+, IP67, AcuSense",
+     fortinet:"FCM-FB85-CA", fortiDesc:"8MP AI bullet, IR 50m, 4K — doubles resolution; FortiCamera Cloud vs Hikvision on-prem NVR required"},
+    {vendor:"Hikvision", model:"DS-2CD2163G2-I",    form:"Outdoor Dome",         res:"6MP",   fov:102, ir:40, poe:"af",  ai:false, cloud:false, desc:"6MP AcuSense dome, IR 40m, IP67/IK10, H.265+, deep learning intrusion/line crossing",
+     fortinet:"FCM-FD55-CA", fortiDesc:"5MP AI outdoor dome, FortiCamera Cloud — integrated AI analytics and cloud management; Hikvision requires separate VMS/NVR"},
+    {vendor:"Hikvision", model:"DS-2CD2T86G2-2I",   form:"Outdoor Bullet",       res:"8MP",   fov:102, ir:60, poe:"at",  ai:false, cloud:false, desc:"8MP 4K AcuSense bullet, dual IR 60m, IP67, H.265+, PoE+, deep learning analytics",
+     fortinet:"FCM-FB85-CA", fortiDesc:"8MP AI bullet, IR 50m, FortiCamera Cloud — matched resolution, unified cloud management platform vs Hikvision standalone stack"},
+    {vendor:"Hikvision", model:"DS-2DE4425IWG-E",   form:"PTZ",                  res:"4MP",   fov:61,  ir:100,poe:"at",  ai:false, cloud:false, desc:"4MP PTZ, 25× optical zoom, IR 100m, IP66, 360° pan, auto-tracking, H.265+",
+     fortinet:"FCM-FD55-CA", fortiDesc:"No PTZ in FortiCamera range; FD55-CA covers fixed wide-area with AI analytics — Hikvision PTZ better for long-range tracking"},
+    {vendor:"Hikvision", model:"DS-2CD2347G2H-LISU", form:"Indoor/Outdoor Dome", res:"4MP",   fov:107, ir:30, poe:"af",  ai:true,  cloud:false, desc:"4MP ColorVu + AcuSense dome, strobe/audio alarm, IR+white light 30m, IP67, H.265+",
+     fortinet:"FCM-FD51-A",  fortiDesc:"5MP AI dome, FortiCamera Cloud — comparable AI analytics with enterprise cloud platform; Hikvision requires local NVR for management"},
+    {vendor:"Hikvision", model:"DS-2CD2T47G2H-LI",  form:"Outdoor Bullet",       res:"4MP",   fov:100, ir:60, poe:"af",  ai:true,  cloud:false, desc:"4MP ColorVu AcuSense bullet, IR+white light 60m, H.265+, IP67, audio I/O, alarm output",
+     fortinet:"FCM-FB85-CA", fortiDesc:"8MP AI bullet, IR 50m, FortiCamera Cloud — doubles resolution; FortiCamera Cloud platform vs Hikvision's standalone ecosystem"},
+    {vendor:"Hikvision", model:"DS-2CD2387G2P-LSU/SL", form:"Outdoor Dome",      res:"8MP",   fov:120, ir:30, poe:"at",  ai:true,  cloud:false, desc:"8MP 4K PanoVu+ 180° panoramic dome, AcuSense, IR+white light 30m, PoE+, IP67, built-in mic",
+     fortinet:"FCM-FE120B-CA",fortiDesc:"5MP 360° fisheye, FortiCamera Cloud — full 360° vs 180° panoramic; FortiCamera Cloud AI + enterprise management vs Hikvision NVR"},
   ];
 
-  const vendors=["Axis","Verkada","Meraki","Avigilon","Ubiquiti"];
-  const vColors={Axis:"#003366",Verkada:"#006EFF",Meraki:"#67B346",Avigilon:"#CC0000",Ubiquiti:"#0069FF"};
-  const vBg={Axis:"#E8EFF8",Verkada:"#E6F0FF",Meraki:"#EDF7E6",Avigilon:"#FDEAEA",Ubiquiti:"#E6F2FF"};
+  const vendors=["Axis","Verkada","Meraki","Avigilon","Ubiquiti","Hikvision"];
+  const vColors={Axis:"#003366",Verkada:"#006EFF",Meraki:"#67B346",Avigilon:"#CC0000",Ubiquiti:"#0069FF",Hikvision:"#CC0000"};
+  const vBg={Axis:"#E8EFF8",Verkada:"#E6F0FF",Meraki:"#EDF7E6",Avigilon:"#FDEAEA",Ubiquiti:"#E6F2FF",Hikvision:"#FDEAEA"};
   const forms=[...new Set(COMP_DB.map(c=>c.form.split(" ").pop()))].sort();
   const filtered=COMP_DB.filter(c=>{
     if(cmpVendor!=="All"&&c.vendor!==cmpVendor)return false;
