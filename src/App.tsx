@@ -3300,7 +3300,7 @@ export default function App(){
       </thead>
       <tbody>
         {[
-          {q:"● Excellent",c:FT.green, hex:"#00A651",range:"≤ 45%",use:"Entrances, license plates, face ID"},
+          {q:"● Excellent",c:FT.green, hex:"#00A651",range:"≤ 45%",use:"Entrances, license plates, face recognition feed"},
           {q:"● Fair",     c:"#C8A800",hex:"#E6C700",range:"46 – 70%",use:"General area coverage, motion detection"},
           {q:"● Poor",     c:FT.orange,hex:"#F47920",range:"71 – 90%",use:"Silhouette only — overlap recommended"},
           {q:"● Unusable", c:FT.red,   hex:"#DA291C",range:"> 90%",use:"Night coverage unreliable — re-design"},
@@ -3357,6 +3357,29 @@ export default function App(){
         {t:"Red = re-design",d:"Red means nighttime coverage is unreliable at that distance. Shorten range or upgrade the camera."},
         {t:"Custom vs. default",d:'The sidebar shows “(custom)” when the default range is overridden. Reset any time with the ↺ button.'},
         {t:"Adding competitors",d:'Add entries to the COMP_DB array in App.tsx — one object per model following the existing template.'},
+      ].map(({t,d})=>(
+        <div key={t} style={{background:DM.bg,border:`1px solid ${DM.border}`,borderRadius:8,padding:"10px 12px",fontSize:12}}>
+          <div style={{fontWeight:700,color:DM.text,marginBottom:3}}>{t}</div>
+          <div style={{color:DM.textSub,lineHeight:1.5}}>{d}</div>
+        </div>
+      ))}
+    </div>
+  </div>
+
+  {/* Face Recognition */}
+  <div style={{...S.pan,marginBottom:12}}>
+    <div style={S.st}>Face Recognition</div>
+    <div style={{fontSize:12,color:DM.textSub,lineHeight:1.7,marginBottom:10}}>
+      Face recognition in the Fortinet ecosystem is a <strong style={{color:DM.text}}>FortiCentral</strong> feature — it runs as a licensed analytics option on the VMS platform, not on the camera or FortiRecorder.
+      The camera's role is simply to deliver sufficient image quality at the target zone; FortiCentral handles the matching engine.
+    </div>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))",gap:8}}>
+      {[
+        {t:"Where it runs",d:"FortiCentral (VMS) — licensed analytics option. Not a camera feature, not FortiRecorder."},
+        {t:"Camera requirements",d:"Use a straight-on fixed dome or bullet aimed at the chokepoint. Keep the range in Excellent (green) zone for reliable facial detail."},
+        {t:"Avoid fisheye",d:"The FCM-FE120B-CA 1.22mm lens distorts faces at distance — not suitable as a face recognition feed regardless of analytics."},
+        {t:"Recommended models",d:"FCM-FD51-A or FCM-FD55-CA at an entrance, calibrated so faces fill at least 100px across the image width."},
+        {t:"On-camera AI",d:"FortiCamera -CA models detect people, vehicles, and attributes on-device. Face recognition is a separate, higher-level function in FortiCentral."},
       ].map(({t,d})=>(
         <div key={t} style={{background:DM.bg,border:`1px solid ${DM.border}`,borderRadius:8,padding:"10px 12px",fontSize:12}}>
           <div style={{fontWeight:700,color:DM.text,marginBottom:3}}>{t}</div>
