@@ -15,6 +15,8 @@ const CAMERA_DB = [
     faceQ:{day:{"2":100,"5":92,"8":75,"12":52,"20":25},night:{"2":82,"5":68,"8":48,"12":28,"20":10}}, lprQ:{day:{"5":90,"10":72,"15":48,"20":28,"30":10},night:{"5":75,"10":55,"15":32,"20":15,"30":5}} },
   { model:"FCM-CD55-C",  sku:"FCM-CD55-C",  name:"FortiCamera CD55-C",  cloudOnly:true,  type:"Dome Indoor/Outdoor",     resolution:"5MP",     fov:100, irRange:20, poeStd:"802.3af", poeBudget:13, color:"#0071C5", desc:"5MP dome, 2.7-13mm varifocal, IP67/IK10, 512GB SD",
     faceQ:{day:{"2":100,"5":95,"8":80,"12":60,"20":35},night:{"2":85,"5":72,"8":55,"12":35,"20":14}}, lprQ:{day:{"5":95,"10":78,"15":58,"20":38,"30":16},night:{"5":80,"10":62,"15":42,"20":22,"30":8}} },
+  { model:"FCM-FD52-CA", sku:"FCM-FD52-CA", name:"FortiCamera FD52-CA", cloudOnly:true,  type:"AI Dome Indoor/Outdoor",  resolution:"5MP",     fov:103, irRange:30, poeStd:"802.3af", poeBudget:13, color:FT.red, desc:"5MP AI dome, 2.8mm fixed, IP66, 256GB SD, vandal-proof",
+    faceQ:{day:{"2":100,"5":92,"8":75,"12":52,"20":25},night:{"2":82,"5":68,"8":48,"12":28,"20":10}}, lprQ:{day:{"5":90,"10":72,"15":48,"20":28,"30":10},night:{"5":75,"10":55,"15":32,"20":15,"30":5}} },
   { model:"FCM-FD55-CA", sku:"FCM-FD55-CA", name:"FortiCamera FD55-CA", cloudOnly:true,  type:"AI Dome Indoor/Outdoor",  resolution:"5MP",     fov:105, irRange:50, poeStd:"802.3at", poeBudget:25, color:FT.red, desc:"5MP AI dome, varifocal, DI/DO, IP67/IK10, 512GB SD",
     faceQ:{day:{"2":100,"5":98,"10":88,"15":70,"20":50},night:{"2":90,"5":80,"10":65,"15":45,"20":25}}, lprQ:{day:{"5":98,"10":88,"20":72,"30":52,"40":28},night:{"5":85,"10":70,"20":52,"30":32,"40":14}} },
   { model:"FCM-FB85-CA", sku:"FCM-FB85-CA", name:"FortiCamera FB85-CA", cloudOnly:true,  type:"AI Bullet Indoor/Outdoor", resolution:"8MP",    fov:84,  irRange:50, poeStd:"802.3at", poeBudget:25, color:FT.red, desc:"8MP AI bullet, varifocal, DI/DO, IP67/IK10, 1TB SD",
@@ -73,7 +75,7 @@ const CAM_BITRATE = {
 // SD card sizes per cloud camera model (GB)
 const CAM_SD = {
   "FCM-MC51-C":512,"FCM-CD51-C":512,"FCM-CD55-C":512,
-  "FCM-FD55-CA":512,"FCM-FB85-CA":1024,"FCM-FE120B-CA":1024,
+  "FCM-FD52-CA":256,"FCM-FD55-CA":512,"FCM-FB85-CA":1024,"FCM-FE120B-CA":1024,
 };
 // Idle background upload bandwidth per cloud camera (Mbps) — metadata + thumbnail
 const CAM_IDLE_BW = 0.8;
