@@ -2619,58 +2619,6 @@ export default function App(){
       No cameras placed yet. Add cameras on the Floor Plan tab to see sizing estimates.
     </div>}
 
-    {/* ── PER-CAMERA RECORDING QUALITY ─── */}
-    {totalCams>0&&<div style={panS}>
-      <div style={stS}>🎚 Per-Camera Recording Quality</div>
-      <div style={{fontSize:10,color:FT.textSub,marginBottom:8}}>
-        Select the recording quality (MP) for each camera. Lower MP reduces bitrate and storage proportionally. Defaults to each camera's native resolution.
-      </div>
-      <table style={{width:"100%",borderCollapse:"collapse"}}>
-        <thead><tr style={tblHead}>
-          {["Label","Model","Location","Native Res","Record Quality","Eff. Bitrate"].map(h=><th key={h} style={thS}>{h}</th>)}
-        </tr></thead>
-        <tbody>{allCams.map((c,i)=>{
-          const d=CAMERA_DB.find(x=>x.model===c.model);
-          if(!d)return null;
-          const natMp=nativeMp(d.resolution);
-          const chosenMp=sizCamQuality[c.id]||natMp;
-          const brFull=(CAM_BITRATE[d.resolution]||{"H.264":4,"H.265":2.5})[sizCodec]||2.5;
-          const effBr=(brFull*(chosenMp/natMp));
-          const qualOptions=Array.from({length:natMp},(_,k)=>k+1);
-          const isReduced=chosenMp<natMp;
-          return<tr key={c.id}>
-            <td style={{...tdS(i),fontWeight:600,color:FT.navy}}>{c.label||"Cam"}</td>
-            <td style={{...tdS(i),fontSize:9,color:FT.grayDark}}>{d.sku}</td>
-            <td style={{...tdS(i),fontSize:9,color:FT.textSub}}>{c.location||"—"}</td>
-            <td style={tdS(i)}>{d.resolution}</td>
-            <td style={tdS(i)}>
-              <select
-                value={chosenMp}
-                onChange={e=>setSizCamQuality(prev=>({...prev,[c.id]:+e.target.value}))}
-                style={{background:darkMode?"#252535":FT.white,color:darkMode?FT.white:FT.navy,border:"1px solid "+(isReduced?FT.orange:FT.gray),borderRadius:3,padding:"2px 4px",fontSize:10,fontWeight:isReduced?700:400,cursor:"pointer"}}
-              >
-                {qualOptions.map(mp=>(
-                  <option key={mp} value={mp}>{mp} MP{mp===natMp?" (native)":""}</option>
-                ))}
-              </select>
-            </td>
-            <td style={{...tdS(i),fontWeight:700,color:isReduced?FT.orange:FT.navy}}>{effBr.toFixed(2)} Mbps</td>
-          </tr>;
-        })}</tbody>
-      </table>
-      {allCams.some(c=>{const d=CAMERA_DB.find(x=>x.model===c.model);return d&&(sizCamQuality[c.id]||nativeMp(d.resolution))<nativeMp(d.resolution);})&&
-        <div style={{fontSize:10,color:FT.orange,marginTop:6,fontWeight:600}}>
-          ⚠ Some cameras are set below native resolution — bandwidth and storage estimates reflect the selected qualities.
-        </div>
-      }
-      <div style={{display:"flex",justifyContent:"flex-end",marginTop:6}}>
-        <button onClick={()=>setSizCamQuality({})}
-          style={{fontSize:10,padding:"3px 10px",background:"none",border:"1px solid "+FT.gray,borderRadius:3,color:FT.grayDark,cursor:"pointer"}}>
-          Reset all to native
-        </button>
-      </div>
-    </div>}
-
     {/* ── BANDWIDTH (cloud mode only) ─── */}
     {sizMode==="cloud"&&totalCams>0&&<div style={panS}>
       <div style={stS}>☁ Cloud Upload Bandwidth</div>
@@ -2798,7 +2746,59 @@ export default function App(){
       </div>
     </div>}
 
-    {/* ── PER-CAMERA DETAIL (collapsible info) ─── */}
+    {/* ── PER-CAMERA RECORDING QUALITY ─── */}
+    {totalCams>0&&<div style={panS}>
+      <div style={stS}>🎚 Per-Camera Recording Quality</div>
+      <div style={{fontSize:10,color:FT.textSub,marginBottom:8}}>
+        Select the recording quality (MP) for each camera. Lower MP reduces bitrate and storage proportionally. Defaults to each camera's native resolution.
+      </div>
+      <table style={{width:"100%",borderCollapse:"collapse"}}>
+        <thead><tr style={tblHead}>
+          {["Label","Model","Location","Native Res","Record Quality","Eff. Bitrate"].map(h=><th key={h} style={thS}>{h}</th>)}
+        </tr></thead>
+        <tbody>{allCams.map((c,i)=>{
+          const d=CAMERA_DB.find(x=>x.model===c.model);
+          if(!d)return null;
+          const natMp=nativeMp(d.resolution);
+          const chosenMp=sizCamQuality[c.id]||natMp;
+          const brFull=(CAM_BITRATE[d.resolution]||{"H.264":4,"H.265":2.5})[sizCodec]||2.5;
+          const effBr=(brFull*(chosenMp/natMp));
+          const qualOptions=Array.from({length:natMp},(_,k)=>k+1);
+          const isReduced=chosenMp<natMp;
+          return<tr key={c.id}>
+            <td style={{...tdS(i),fontWeight:600,color:FT.navy}}>{c.label||"Cam"}</td>
+            <td style={{...tdS(i),fontSize:9,color:FT.grayDark}}>{d.sku}</td>
+            <td style={{...tdS(i),fontSize:9,color:FT.textSub}}>{c.location||"—"}</td>
+            <td style={tdS(i)}>{d.resolution}</td>
+            <td style={tdS(i)}>
+              <select
+                value={chosenMp}
+                onChange={e=>setSizCamQuality(prev=>({...prev,[c.id]:+e.target.value}))}
+                style={{background:darkMode?"#252535":FT.white,color:darkMode?FT.white:FT.navy,border:"1px solid "+(isReduced?FT.orange:FT.gray),borderRadius:3,padding:"2px 4px",fontSize:10,fontWeight:isReduced?700:400,cursor:"pointer"}}
+              >
+                {qualOptions.map(mp=>(
+                  <option key={mp} value={mp}>{mp} MP{mp===natMp?" (native)":""}</option>
+                ))}
+              </select>
+            </td>
+            <td style={{...tdS(i),fontWeight:700,color:isReduced?FT.orange:FT.navy}}>{effBr.toFixed(2)} Mbps</td>
+          </tr>;
+        })}</tbody>
+      </table>
+      {allCams.some(c=>{const d=CAMERA_DB.find(x=>x.model===c.model);return d&&(sizCamQuality[c.id]||nativeMp(d.resolution))<nativeMp(d.resolution);})&&
+        <div style={{fontSize:10,color:FT.orange,marginTop:6,fontWeight:600}}>
+          ⚠ Some cameras are set below native resolution — bandwidth and storage estimates reflect the selected qualities.
+        </div>
+      }
+      <div style={{display:"flex",justifyContent:"flex-end",marginTop:6}}>
+        <button onClick={()=>setSizCamQuality({})}
+          style={{fontSize:10,padding:"3px 10px",background:"none",border:"1px solid "+FT.gray,borderRadius:3,color:FT.grayDark,cursor:"pointer"}}>
+          Reset all to native
+        </button>
+      </div>
+    </div>}
+
+    {/* ── BITRATE REFERENCE ─── */}
     {totalCams>0&&<div style={panS}>
       <div style={stS}>📊 Camera Bitrate Reference</div>
       <table style={{width:"100%",borderCollapse:"collapse"}}>
