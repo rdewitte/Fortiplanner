@@ -974,6 +974,7 @@ export default function App(){
   const [sizHours,setSizHours]=useState(24);   // recording hours/day
   const [sizHddTb,setSizHddTb]=useState(8);    // on-prem total HDD TB
   const [sizConcurrent,setSizConcurrent]=useState(1); // live viewers per camera
+  const [sizCamQuality,setSizCamQuality]=useState({}); // {[camId]: MP override}
   const fileRef=useRef(null);
   const projFileRef=useRef(null);
   const nid=useRef(1);
@@ -2495,46 +2496,66 @@ export default function App(){
 
 {/* ════ BOM TAB ═══════════════════════════════════════════════════════════ */}
 {tab==="sizing"&&(()=>{
+  // ── Helper: extract native MP number from resolution string ───────────
+  const nativeMp=res=>{
+    // "5MP"→5, "8MP"→8, "12MP"→12, "12MP/9MP"→12
+    const m=String(res).match(/^(\d+)MP/);
+    return m?parseInt(m[1],10):5;
+  };
+
+  // ── Helper: effective bitrate for a specific camera with quality override
+  const effectiveBr=(cam,codec)=>{
+    const d=CAMERA_DB.find(x=>x.model===cam.model);
+    if(!d)return 2.5;
+    const res=d.resolution;
+    const brFull=(CAM_BITRATE[res]||{"H.264":4,"H.265":2.5})[codec]||2.5;
+    const natMp=nativeMp(res);
+    const chosenMp=sizCamQuality[cam.id]||natMp; // default = native
+    // Linear scaling: bitrate ∝ chosen/native
+    return brFull*(chosenMp/natMp);
+  };
+
   // ── build per-model summary from allCams ──────────────────────────────
+  // Also compute per-model effective avg bitrate (weighted by quality overrides)
   const camGroups={};
   allCams.forEach(c=>{
     const d=CAMERA_DB.find(x=>x.model===c.model);
     if(!d)return;
-    if(!camGroups[c.model])camGroups[c.model]={d,count:0};
+    if(!camGroups[c.model])camGroups[c.model]={d,count:0,totalBr:0};
     camGroups[c.model].count++;
+    camGroups[c.model].totalBr+=effectiveBr(c,sizCodec);
   });
-  const rows=Object.values(camGroups);
+  const rows=Object.values(camGroups).map(r=>({...r,avgBr:r.totalBr/r.count}));
   const totalCams=allCams.length;
   const cloudRows=rows.filter(r=>r.d.cloudOnly);
   const onpremRows=rows.filter(r=>!r.d.cloudOnly);
 
-  // Per-row calculations
-  const calcRow=(r,codec,motionPct,hoursPerDay)=>{
-    const res=r.d.resolution;
-    const brBase=(CAM_BITRATE[res]||{"H.264":4,"H.265":2.5})[codec]||2.5;
+  // Per-row calculations (uses avgBr from quality overrides)
+  const calcRow=(r,motionPct,hoursPerDay)=>{
+    const br=r.avgBr;
     // Daily GB/cam = bitrate(Mbps) × 3600s × hours × motionRatio / 8bits / 1024 MB→GB
-    const dailyGbPerCam=brBase*3600*hoursPerDay*(motionPct/100)/8/1024;
-    return{br:brBase,dailyGbPerCam};
+    const dailyGbPerCam=br*3600*hoursPerDay*(motionPct/100)/8/1024;
+    return{br,dailyGbPerCam};
   };
 
   // ── BANDWIDTH section ─────────────────────────────────────────────────
   let totalIdleBw=0, totalLiveBw=0;
   cloudRows.forEach(r=>{
     totalIdleBw+=r.count*CAM_IDLE_BW;
-    totalLiveBw+=r.count*sizConcurrent*(CAM_BITRATE[r.d.resolution]||{"H.264":4,"H.265":2.5})[sizCodec];
+    totalLiveBw+=r.count*sizConcurrent*r.avgBr;
   });
 
   // ── STORAGE section ───────────────────────────────────────────────────
-  // Cloud: SD-card retention per model
+  // Cloud: SD-card retention per model (using avg effective bitrate)
   const cloudStorageRows=cloudRows.map(r=>{
-    const{dailyGbPerCam}=calcRow(r,sizCodec,sizMotion,sizHours);
+    const{dailyGbPerCam}=calcRow(r,sizMotion,sizHours);
     const sdGb=CAM_SD[r.d.model]||512;
     const retDays=dailyGbPerCam>0?Math.floor(sdGb/dailyGbPerCam):999;
     return{...r,dailyGbPerCam,sdGb,retDays};
   });
   // On-prem: all cameras share the FortiRecorder HDD pool
   const onpremTotalDailyGb=rows.reduce((sum,r)=>{
-    const{dailyGbPerCam}=calcRow(r,sizCodec,sizMotion,sizHours);
+    const{dailyGbPerCam}=calcRow(r,sizMotion,sizHours);
     return sum+dailyGbPerCam*r.count;
   },0);
   const onpremRetDays=onpremTotalDailyGb>0?Math.floor(sizHddTb*1024/onpremTotalDailyGb):999;
@@ -2598,6 +2619,58 @@ export default function App(){
       No cameras placed yet. Add cameras on the Floor Plan tab to see sizing estimates.
     </div>}
 
+    {/* ── PER-CAMERA RECORDING QUALITY ─── */}
+    {totalCams>0&&<div style={panS}>
+      <div style={stS}>🎚 Per-Camera Recording Quality</div>
+      <div style={{fontSize:10,color:FT.textSub,marginBottom:8}}>
+        Select the recording quality (MP) for each camera. Lower MP reduces bitrate and storage proportionally. Defaults to each camera's native resolution.
+      </div>
+      <table style={{width:"100%",borderCollapse:"collapse"}}>
+        <thead><tr style={tblHead}>
+          {["Label","Model","Location","Native Res","Record Quality","Eff. Bitrate"].map(h=><th key={h} style={thS}>{h}</th>)}
+        </tr></thead>
+        <tbody>{allCams.map((c,i)=>{
+          const d=CAMERA_DB.find(x=>x.model===c.model);
+          if(!d)return null;
+          const natMp=nativeMp(d.resolution);
+          const chosenMp=sizCamQuality[c.id]||natMp;
+          const brFull=(CAM_BITRATE[d.resolution]||{"H.264":4,"H.265":2.5})[sizCodec]||2.5;
+          const effBr=(brFull*(chosenMp/natMp));
+          const qualOptions=Array.from({length:natMp},(_,k)=>k+1);
+          const isReduced=chosenMp<natMp;
+          return<tr key={c.id}>
+            <td style={{...tdS(i),fontWeight:600,color:FT.navy}}>{c.label||"Cam"}</td>
+            <td style={{...tdS(i),fontSize:9,color:FT.grayDark}}>{d.sku}</td>
+            <td style={{...tdS(i),fontSize:9,color:FT.textSub}}>{c.location||"—"}</td>
+            <td style={tdS(i)}>{d.resolution}</td>
+            <td style={tdS(i)}>
+              <select
+                value={chosenMp}
+                onChange={e=>setSizCamQuality(prev=>({...prev,[c.id]:+e.target.value}))}
+                style={{background:darkMode?"#252535":FT.white,color:darkMode?FT.white:FT.navy,border:"1px solid "+(isReduced?FT.orange:FT.gray),borderRadius:3,padding:"2px 4px",fontSize:10,fontWeight:isReduced?700:400,cursor:"pointer"}}
+              >
+                {qualOptions.map(mp=>(
+                  <option key={mp} value={mp}>{mp} MP{mp===natMp?" (native)":""}</option>
+                ))}
+              </select>
+            </td>
+            <td style={{...tdS(i),fontWeight:700,color:isReduced?FT.orange:FT.navy}}>{effBr.toFixed(2)} Mbps</td>
+          </tr>;
+        })}</tbody>
+      </table>
+      {allCams.some(c=>{const d=CAMERA_DB.find(x=>x.model===c.model);return d&&(sizCamQuality[c.id]||nativeMp(d.resolution))<nativeMp(d.resolution);})&&
+        <div style={{fontSize:10,color:FT.orange,marginTop:6,fontWeight:600}}>
+          ⚠ Some cameras are set below native resolution — bandwidth and storage estimates reflect the selected qualities.
+        </div>
+      }
+      <div style={{display:"flex",justifyContent:"flex-end",marginTop:6}}>
+        <button onClick={()=>setSizCamQuality({})}
+          style={{fontSize:10,padding:"3px 10px",background:"none",border:"1px solid "+FT.gray,borderRadius:3,color:FT.grayDark,cursor:"pointer"}}>
+          Reset all to native
+        </button>
+      </div>
+    </div>}
+
     {/* ── BANDWIDTH (cloud mode only) ─── */}
     {sizMode==="cloud"&&totalCams>0&&<div style={panS}>
       <div style={stS}>☁ Cloud Upload Bandwidth</div>
@@ -2607,20 +2680,19 @@ export default function App(){
       {cloudRows.length===0?<div style={{fontSize:10,color:FT.grayMid}}>No cloud cameras placed.</div>:
       <table style={{width:"100%",borderCollapse:"collapse",marginBottom:10}}>
         <thead><tr style={tblHead}>
-          {["Model","Qty","Resolution","Bitrate (Mbps)","Idle Bw (Mbps)","Live Bw ×"+sizConcurrent+"v (Mbps)"].map(h=><th key={h} style={thS}>{h}</th>)}
+          {["Model","Qty","Eff. Bitrate (Mbps)","Idle Bw (Mbps)","Live Bw ×"+sizConcurrent+"v (Mbps)"].map(h=><th key={h} style={thS}>{h}</th>)}
         </tr></thead>
         <tbody>{cloudRows.map((r,i)=>{
-          const br=(CAM_BITRATE[r.d.resolution]||{"H.264":4,"H.265":2.5})[sizCodec]||2.5;
           const idle=(r.count*CAM_IDLE_BW).toFixed(1);
-          const live=(r.count*sizConcurrent*br).toFixed(1);
+          const live=(r.count*sizConcurrent*r.avgBr).toFixed(1);
           return<tr key={r.d.model}>
-            {[r.d.name,r.count,r.d.resolution,br.toFixed(1),idle,live].map((v,j)=>(
+            {[r.d.name,r.count,r.avgBr.toFixed(2),idle,live].map((v,j)=>(
               <td key={j} style={{...tdS(i),fontWeight:j===0?600:400,color:j===0?FT.navy:"inherit"}}>{v}</td>
             ))}
           </tr>;
         })}</tbody>
         <tfoot><tr style={{background:FT.navy}}>
-          <td colSpan={4} style={{...thS,textAlign:"right"}}>Total</td>
+          <td colSpan={3} style={{...thS,textAlign:"right"}}>Total</td>
           <td style={thS}>{totalIdleBw.toFixed(1)} Mbps</td>
           <td style={thS}>{totalLiveBw.toFixed(1)} Mbps</td>
         </tr></tfoot>
@@ -2647,14 +2719,13 @@ export default function App(){
       {cloudRows.length===0?<div style={{fontSize:10,color:FT.grayMid}}>No cloud cameras placed.</div>:
       <table style={{width:"100%",borderCollapse:"collapse"}}>
         <thead><tr style={tblHead}>
-          {["Model","Qty","Resolution","Bitrate","SD Card","Daily GB/cam","Retention (days)"].map(h=><th key={h} style={thS}>{h}</th>)}
+          {["Model","Qty","Eff. Bitrate","SD Card","Daily GB/cam","Retention (days)"].map(h=><th key={h} style={thS}>{h}</th>)}
         </tr></thead>
         <tbody>{cloudStorageRows.map((r,i)=>(
           <tr key={r.d.model}>
             <td style={{...tdS(i),fontWeight:600,color:FT.navy}}>{r.d.name}</td>
             <td style={tdS(i)}>{r.count}</td>
-            <td style={tdS(i)}>{r.d.resolution}</td>
-            <td style={tdS(i)}>{((CAM_BITRATE[r.d.resolution]||{"H.264":4,"H.265":2.5})[sizCodec]||2.5).toFixed(1)} Mbps</td>
+            <td style={tdS(i)}>{r.avgBr.toFixed(2)} Mbps</td>
             <td style={tdS(i)}>{r.sdGb>=1024?(r.sdGb/1024)+"TB":r.sdGb+"GB"}</td>
             <td style={tdS(i)}>{r.dailyGbPerCam.toFixed(2)} GB</td>
             <td style={{...tdS(i),fontWeight:700,color:r.retDays>=14?FT.green:r.retDays>=7?FT.orange:FT.red}}>{r.retDays} days</td>
@@ -2671,22 +2742,20 @@ export default function App(){
       </div>
       <table style={{width:"100%",borderCollapse:"collapse",marginBottom:10}}>
         <thead><tr style={tblHead}>
-          {["Model","Qty","Resolution","Bitrate/cam","Total (Mbps)"].map(h=><th key={h} style={thS}>{h}</th>)}
+          {["Model","Qty","Eff. Bitrate/cam","Total (Mbps)"].map(h=><th key={h} style={thS}>{h}</th>)}
         </tr></thead>
         <tbody>{rows.map((r,i)=>{
-          const br=(CAM_BITRATE[r.d.resolution]||{"H.264":4,"H.265":2.5})[sizCodec]||2.5;
-          const total=(r.count*br).toFixed(1);
+          const total=(r.count*r.avgBr).toFixed(1);
           return<tr key={r.d.model}>
             <td style={{...tdS(i),fontWeight:600,color:r.d.cloudOnly?FT.red:FT.navy}}>{r.d.name}</td>
             <td style={tdS(i)}>{r.count}</td>
-            <td style={tdS(i)}>{r.d.resolution}</td>
-            <td style={tdS(i)}>{br.toFixed(1)} Mbps</td>
+            <td style={tdS(i)}>{r.avgBr.toFixed(2)} Mbps</td>
             <td style={{...tdS(i),fontWeight:700}}>{total} Mbps</td>
           </tr>;
         })}</tbody>
         <tfoot><tr style={{background:FT.navy}}>
-          <td colSpan={4} style={{...thS,textAlign:"right"}}>Total LAN</td>
-          <td style={thS}>{rows.reduce((s,r)=>s+r.count*((CAM_BITRATE[r.d.resolution]||{"H.264":4,"H.265":2.5})[sizCodec]||2.5),0).toFixed(1)} Mbps</td>
+          <td colSpan={3} style={{...thS,textAlign:"right"}}>Total LAN</td>
+          <td style={thS}>{rows.reduce((s,r)=>s+r.count*r.avgBr,0).toFixed(1)} Mbps</td>
         </tr></tfoot>
       </table>
     </div>}
@@ -2699,21 +2768,20 @@ export default function App(){
       </div>
       <table style={{width:"100%",borderCollapse:"collapse",marginBottom:10}}>
         <thead><tr style={tblHead}>
-          {["Model","Qty","Resolution","Bitrate/cam","Daily GB/cam","Daily GB total"].map(h=><th key={h} style={thS}>{h}</th>)}
+          {["Model","Qty","Eff. Bitrate/cam","Daily GB/cam","Daily GB total"].map(h=><th key={h} style={thS}>{h}</th>)}
         </tr></thead>
         <tbody>{rows.map((r,i)=>{
-          const{br,dailyGbPerCam}=calcRow(r,sizCodec,sizMotion,sizHours);
+          const{br,dailyGbPerCam}=calcRow(r,sizMotion,sizHours);
           return<tr key={r.d.model}>
             <td style={{...tdS(i),fontWeight:600,color:r.d.cloudOnly?FT.red:FT.navy}}>{r.d.name}</td>
             <td style={tdS(i)}>{r.count}</td>
-            <td style={tdS(i)}>{r.d.resolution}</td>
-            <td style={tdS(i)}>{br.toFixed(1)} Mbps</td>
+            <td style={tdS(i)}>{br.toFixed(2)} Mbps</td>
             <td style={tdS(i)}>{dailyGbPerCam.toFixed(2)} GB</td>
             <td style={{...tdS(i),fontWeight:700}}>{(dailyGbPerCam*r.count).toFixed(1)} GB</td>
           </tr>;
         })}</tbody>
         <tfoot><tr style={{background:FT.navy}}>
-          <td colSpan={5} style={{...thS,textAlign:"right"}}>Total daily</td>
+          <td colSpan={4} style={{...thS,textAlign:"right"}}>Total daily</td>
           <td style={thS}>{onpremTotalDailyGb.toFixed(1)} GB</td>
         </tr></tfoot>
       </table>
