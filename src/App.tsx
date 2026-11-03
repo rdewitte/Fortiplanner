@@ -2746,6 +2746,61 @@ export default function App(){
       </div>
     </div>}
 
+    {/* ── FORTIRECORDER VM SIZING ─── */}
+    {sizMode==="onprem"&&totalCams>0&&(()=>{
+      const VM_SIZING=[
+        {cpu:"Intel® Xeon E5-2620", cores:6, ram:12, clock:2.0,   maxCams:150, bwLow:120,  bwHigh:450, stLow:35,  stHigh:130},
+        {cpu:"Intel® Core™ i5-3470",cores:4, ram:4,  clock:3.2,   maxCams:64,  bwLow:50,   bwHigh:200, stLow:15,  stHigh:56},
+        {cpu:"Intel® Celeron G540",  cores:2, ram:4,  clock:2.5,   maxCams:32,  bwLow:25,   bwHigh:100, stLow:7,   stHigh:28},
+      ];
+      const nCams=allCams.length;
+      const totalDailyGb=onpremTotalDailyGb;
+      const neededTb30=(totalDailyGb*30/1024);
+      const totalLanMbps=rows.reduce((s,r)=>s+r.count*r.avgBr,0);
+      const recommended=VM_SIZING.find(v=>v.maxCams>=nCams&&v.stHigh>=neededTb30&&v.bwHigh>=totalLanMbps)||VM_SIZING[0];
+      return<div style={panS}>
+        <div style={stS}>🖥 FortiRecorder VM Sizing Reference</div>
+        <div style={{fontSize:10,color:FT.textSub,marginBottom:8}}>
+          Reference specs for FortiRecorder VM deployment on VMware / KVM / Hyper-V. Storage is for 30-day continuous recording; bandwidth is estimated at 0.8–3 Mbps/cam depending on resolution and quality settings.
+        </div>
+        <table style={{width:"100%",borderCollapse:"collapse",marginBottom:10}}>
+          <thead><tr style={tblHead}>
+            {["CPU","Cores","RAM","Clock","Max Cams","Bandwidth","Storage (30d)","Fit?"].map(h=><th key={h} style={thS}>{h}</th>)}
+          </tr></thead>
+          <tbody>{VM_SIZING.map((v,i)=>{
+            const fits=v.maxCams>=nCams&&v.stHigh>=neededTb30&&v.bwHigh>=totalLanMbps;
+            const isRec=v===recommended;
+            return<tr key={v.cpu} style={isRec?{outline:"2px solid "+FT.green}:{}}>
+              <td style={{...tdS(i),fontWeight:isRec?700:400,color:isRec?FT.navy:undefined}}>{v.cpu}</td>
+              <td style={tdS(i)}>{v.cores}</td>
+              <td style={tdS(i)}>{v.ram} GB</td>
+              <td style={tdS(i)}>{v.clock} GHz</td>
+              <td style={{...tdS(i),fontWeight:600,color:v.maxCams>=nCams?FT.green:FT.red}}>{v.maxCams}</td>
+              <td style={tdS(i)}>{v.bwLow}–{v.bwHigh} Mbps</td>
+              <td style={tdS(i)}>{v.stLow}–{v.stHigh} TB</td>
+              <td style={{...tdS(i),fontWeight:700,color:fits?FT.green:FT.red,textAlign:"center"}}>{fits?"✓":"✗"}</td>
+            </tr>;
+          })}</tbody>
+        </table>
+        <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+          {[
+            ["Your cameras",nCams+" cams",nCams<=32?FT.green:nCams<=64?FT.orange:FT.red],
+            ["LAN bandwidth needed",totalLanMbps.toFixed(1)+" Mbps",FT.navy],
+            ["Storage needed (30d)",neededTb30.toFixed(1)+" TB",FT.navy],
+            ["Recommended VM",recommended.cpu.replace(/Intel® /,""),FT.green],
+          ].map(([label,val,col])=>(
+            <div key={label} style={{flex:1,minWidth:130,background:FT.offWhite,borderRadius:5,padding:"8px 12px",borderLeft:"4px solid "+col}}>
+              <div style={{fontSize:9,color:FT.textSub,fontWeight:600,textTransform:"uppercase",letterSpacing:0.5}}>{label}</div>
+              <div style={{fontSize:13,fontWeight:800,color:col,marginTop:2}}>{val}</div>
+            </div>
+          ))}
+        </div>
+        <div style={{fontSize:9,color:FT.grayMid,marginTop:8}}>
+          (1) Max cameras: maximum recommended — individual results may vary. (2) Bandwidth: for max cameras at typical 0.8–3 Mbps/cam. (3) Storage: 100% continuous recording for 30 days; less if motion-only recording.
+        </div>
+      </div>;
+    })()}
+
     {/* ── PER-CAMERA RECORDING QUALITY ─── */}
     {totalCams>0&&<div style={panS}>
       <div style={stS}>🎚 Per-Camera Recording Quality</div>
