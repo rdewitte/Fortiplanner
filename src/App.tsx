@@ -966,6 +966,8 @@ export default function App(){
   const [bomAcc,setBomAcc]=useState({});
   const [licenseYears,setLicenseYears]=useState(1);
   const [fortiCareYears,setFortiCareYears]=useState(1);
+  const [fortiCareRec,setFortiCareRec]=useState(true);
+  const [fortiCareCam,setFortiCareCam]=useState(true);
   const [selRec,setSelRec]=useState("");
   const [deployMode,setDeployMode]=useState("cloud"); // "cloud"|"onprem"|"hybrid"
   // Sizing tab state
@@ -1751,25 +1753,27 @@ export default function App(){
           lines.push({sku:r.sku,desc:r.name,qty:1,cat:"Recorder"});
           if(r.sku==="FRC-VM-BASE")vmStackLines(allCams.length).forEach(l=>lines.push(l));
           // FortiCare for recorder (appliances only; VM uses a different tier model)
-          if(r.fcCare){
+          if(fortiCareRec&&r.fcCare){
             const fcTerm={1:"12",3:"36",5:"60"}[fortiCareYears]||"12";
             lines.push({sku:`FC-10-${r.fcCare}-247-02-${fcTerm}`,desc:`${r.name} FortiCare Premium (${fortiCareYears}yr)`,qty:1,cat:"Support"});
           }
         }
       }
       // FortiCare per on-prem camera model
-      const camCareGroups={};
-      allCams.forEach(c=>{
-        const d=CAMERA_DB.find(x=>x.model===c.model);
-        if(d&&d.fcCare){
-          if(!camCareGroups[d.fcCare])camCareGroups[d.fcCare]={code:d.fcCare,name:d.name,count:0};
-          camCareGroups[d.fcCare].count++;
-        }
-      });
-      Object.values(camCareGroups).forEach(g=>{
-        const fcTerm={1:"12",3:"36",5:"60"}[fortiCareYears]||"12";
-        lines.push({sku:`FC-10-${g.code}-247-02-${fcTerm}`,desc:`${g.name} FortiCare Premium (${fortiCareYears}yr)`,qty:g.count,cat:"Support"});
-      });
+      if(fortiCareCam){
+        const camCareGroups={};
+        allCams.forEach(c=>{
+          const d=CAMERA_DB.find(x=>x.model===c.model);
+          if(d&&d.fcCare){
+            if(!camCareGroups[d.fcCare])camCareGroups[d.fcCare]={code:d.fcCare,name:d.name,count:0};
+            camCareGroups[d.fcCare].count++;
+          }
+        });
+        Object.values(camCareGroups).forEach(g=>{
+          const fcTerm={1:"12",3:"36",5:"60"}[fortiCareYears]||"12";
+          lines.push({sku:`FC-10-${g.code}-247-02-${fcTerm}`,desc:`${g.name} FortiCare Premium (${fortiCareYears}yr)`,qty:g.count,cat:"Support"});
+        });
+      }
     }
     else if(deployMode==="hybrid"){
       // Hybrid: FortiRecorder (on-prem) + cloud management of all cameras
@@ -1780,25 +1784,27 @@ export default function App(){
           lines.push({sku:r.sku,desc:r.name,qty:1,cat:"Recorder"});
           if(r.sku==="FRC-VM-BASE")vmStackLines(allCams.length).forEach(l=>lines.push(l));
           // FortiCare for recorder (appliances only)
-          if(r.fcCare){
+          if(fortiCareRec&&r.fcCare){
             const fcTerm={1:"12",3:"36",5:"60"}[fortiCareYears]||"12";
             lines.push({sku:`FC-10-${r.fcCare}-247-02-${fcTerm}`,desc:`${r.name} FortiCare Premium (${fortiCareYears}yr)`,qty:1,cat:"Support"});
           }
         }
       }
       // FortiCare per on-prem camera model
-      const camCareGroupsH={};
-      allCams.forEach(c=>{
-        const d=CAMERA_DB.find(x=>x.model===c.model);
-        if(d&&d.fcCare){
-          if(!camCareGroupsH[d.fcCare])camCareGroupsH[d.fcCare]={code:d.fcCare,name:d.name,count:0};
-          camCareGroupsH[d.fcCare].count++;
-        }
-      });
-      Object.values(camCareGroupsH).forEach(g=>{
-        const fcTerm={1:"12",3:"36",5:"60"}[fortiCareYears]||"12";
-        lines.push({sku:`FC-10-${g.code}-247-02-${fcTerm}`,desc:`${g.name} FortiCare Premium (${fortiCareYears}yr)`,qty:g.count,cat:"Support"});
-      });
+      if(fortiCareCam){
+        const camCareGroupsH={};
+        allCams.forEach(c=>{
+          const d=CAMERA_DB.find(x=>x.model===c.model);
+          if(d&&d.fcCare){
+            if(!camCareGroupsH[d.fcCare])camCareGroupsH[d.fcCare]={code:d.fcCare,name:d.name,count:0};
+            camCareGroupsH[d.fcCare].count++;
+          }
+        });
+        Object.values(camCareGroupsH).forEach(g=>{
+          const fcTerm={1:"12",3:"36",5:"60"}[fortiCareYears]||"12";
+          lines.push({sku:`FC-10-${g.code}-247-02-${fcTerm}`,desc:`${g.name} FortiCare Premium (${fortiCareYears}yr)`,qty:g.count,cat:"Support"});
+        });
+      }
       // 2. FRC-CLM-20: cloud management of FortiRecorder cameras (stackable 20-cam blocks, perpetual)
       const clmBlocks=Math.ceil(allCams.length/20);
       if(clmBlocks>0)lines.push({sku:"FRC-CLM-20",desc:"FortiRecorder Cloud Mode — 20 cameras (perpetual, stackable)",qty:clmBlocks,cat:"License"});
@@ -3041,20 +3047,27 @@ export default function App(){
         </div>}
         {/* FortiCare contract term selector (on-prem and hybrid) */}
         {(deployMode==="onprem"||deployMode==="hybrid")&&<div style={{padding:"6px 0 10px",borderBottom:"1px solid "+FT.gray,marginBottom:8}}>
-          <div style={{fontSize:10,fontWeight:700,color:FT.navy,marginBottom:4}}>🛡 FortiCare Premium Contracts</div>
-          <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",marginBottom:4}}>
-            <div style={{fontSize:10,color:FT.textSub}}>Covers recorder + all cameras</div>
-            <div style={{display:"flex",alignItems:"center",gap:4}}>
-              <span style={{fontSize:10,color:FT.textSub}}>Term:</span>
-              {[1,3,5].map(y=><button key={y} onClick={()=>setFortiCareYears(y)}
-                style={{padding:"2px 10px",fontSize:10,fontWeight:700,borderRadius:3,cursor:"pointer",
-                  border:"1px solid "+(fortiCareYears===y?FT.red:FT.gray),
-                  background:fortiCareYears===y?FT.red:FT.white,
-                  color:fortiCareYears===y?FT.white:FT.grayDark}}>
-                {y}yr</button>)}
-            </div>
+          <div style={{fontSize:10,fontWeight:700,color:FT.navy,marginBottom:6}}>🛡 FortiCare Premium Contracts</div>
+          <div style={{display:"flex",flexDirection:"column",gap:5,marginBottom:6}}>
+            <label style={{display:"flex",alignItems:"center",gap:6,cursor:"pointer",fontSize:10}}>
+              <input type="checkbox" checked={fortiCareRec} onChange={e=>setFortiCareRec(e.target.checked)} style={{accentColor:FT.red,width:13,height:13}}/>
+              <span style={{color:fortiCareRec?FT.navy:FT.grayMid}}>FortiRecorder contract</span>
+            </label>
+            <label style={{display:"flex",alignItems:"center",gap:6,cursor:"pointer",fontSize:10}}>
+              <input type="checkbox" checked={fortiCareCam} onChange={e=>setFortiCareCam(e.target.checked)} style={{accentColor:FT.red,width:13,height:13}}/>
+              <span style={{color:fortiCareCam?FT.navy:FT.grayMid}}>Camera contracts (per model)</span>
+            </label>
           </div>
-          <div style={{fontSize:9,color:FT.grayMid}}>FC-10-[model]-247-02-{fortiCareYears===1?"12":fortiCareYears===3?"36":"60"} per device</div>
+          {(fortiCareRec||fortiCareCam)&&<div style={{display:"flex",alignItems:"center",gap:4,flexWrap:"wrap"}}>
+            <span style={{fontSize:10,color:FT.textSub}}>Term:</span>
+            {[1,3,5].map(y=><button key={y} onClick={()=>setFortiCareYears(y)}
+              style={{padding:"2px 10px",fontSize:10,fontWeight:700,borderRadius:3,cursor:"pointer",
+                border:"1px solid "+(fortiCareYears===y?FT.red:FT.gray),
+                background:fortiCareYears===y?FT.red:FT.white,
+                color:fortiCareYears===y?FT.white:FT.grayDark}}>
+              {y}yr</button>)}
+            <span style={{fontSize:9,color:FT.grayMid,marginLeft:4}}>-02-{fortiCareYears===1?"12":fortiCareYears===3?"36":"60"}</span>
+          </div>}
         </div>}
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:4}}>
           {ACCESSORIES_DB.map(a=>(
