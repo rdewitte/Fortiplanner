@@ -29,7 +29,7 @@ const CAMERA_DB = [
     faceQ:{day:{"2":100,"5":94,"8":78,"12":56,"20":30},night:{"2":84,"5":72,"8":52,"12":32,"20":12}}, lprQ:{day:{"5":93,"10":76,"15":55,"20":35,"30":14},night:{"5":78,"10":60,"15":40,"20":20,"30":7}} },
   { model:"FCM-FD51",    sku:"FCM-FD51",    name:"FortiCamera FD51",    cloudOnly:false, type:"Dome",                    resolution:"5MP",     fov:100, irRange:30, poeStd:"802.3af", poeBudget:13, color:FT.grayDark, desc:"5MP dome, 2.8mm fixed, IP66/IK10",          fcCare:"CF51A",
     faceQ:{day:{"2":100,"5":92,"8":75,"12":52,"20":25},night:{"2":82,"5":68,"8":48,"12":28,"20":10}}, lprQ:{day:{"5":90,"10":72,"15":48,"20":28,"30":10},night:{"5":75,"10":55,"15":32,"20":15,"30":5}} },
-  { model:"FCM-FB50",    sku:"FCM-FB50",    name:"FortiCamera FB50",    cloudOnly:false, type:"Bullet Indoor/Outdoor",   resolution:"5MP",     fov:90,  irRange:30, poeStd:"802.3af", poeBudget:13, color:FT.grayDark, desc:"5MP bullet, 2.8-12mm varifocal, IP66/IK10",  fcCare:"FCFB5",
+  { model:"FCM-FB50H",   sku:"FCM-FB50H",   name:"FortiCamera FB50H",   cloudOnly:false, type:"Bullet Indoor/Outdoor",   resolution:"5MP",     fov:90,  irRange:30, poeStd:"802.3af", poeBudget:13, color:FT.grayDark, desc:"5MP bullet, 2.7-13.5mm varifocal, IP66/IK10", fcCare:"MB55H",
     faceQ:{day:{"2":100,"5":96,"10":82,"15":62,"20":42},night:{"2":88,"5":76,"10":60,"15":40,"20":20}}, lprQ:{day:{"5":96,"10":84,"20":68,"30":48,"40":22},night:{"5":82,"10":66,"20":48,"30":28,"40":10}} },
   { model:"FCM-MC51",    sku:"FCM-MC51",    name:"FortiCamera MC51",    cloudOnly:false, type:"Indoor Mini-Cube",        resolution:"5MP",     fov:103, irRange:8,  poeStd:"802.3af", poeBudget:13, color:FT.grayDark, desc:"5MP mini-cube, 2.0mm fixed",                fcCare:"CM51A",
     faceQ:{day:{"2":100,"5":92,"8":75,"12":52,"20":25},night:{"2":82,"5":68,"8":48,"12":28,"20":10}}, lprQ:{day:{"5":90,"10":72,"15":48,"20":28,"30":10},night:{"5":75,"10":55,"15":32,"20":15,"30":5}} },
@@ -40,6 +40,7 @@ const CAMERA_DB = [
 ];
 
 const RECORDER_DB = [
+  { sku:"FRC-400H",    name:"FortiRecorder 400H",    channels:64,   form:"1U Appliance",            hdd:"1×8TB (4×8TB max)", desc:"Up to 64 cameras, 4×GE ports, RAID 0/1/5/10",       fcCare:"K400H" },
   { sku:"FRC-400F",    name:"FortiRecorder 400F",    channels:64,   form:"1U Appliance",            hdd:"1×4TB (4×8TB max)", desc:"Up to 64 cameras, RAID 0/1/5/10, face recognition", fcCare:"FK4HF" },
   { sku:"FRC-100G",    name:"FortiRecorder 100G",    channels:16,   form:"1U Desktop",              hdd:"1×2TB",             desc:"Up to 16 cameras, desktop form factor",              fcCare:"FK10G" },
   { sku:"FRC-VM-BASE", name:"FortiRecorder VM Base", channels:1024, form:"VM (VMware/KVM/Hyper-V)", hdd:"Host storage",      desc:"Base 10 cams, stack FRC-VM-10/50/100 to 1024",      fcCare:null    },
@@ -52,9 +53,9 @@ const ACCESSORIES_DB = [
   { sku:"FCM-CD5-WMT-8",           name:"Wall Mount L-type",                     cat:"Mount"   },
   { sku:"FCM-MOUNTSTH-2",          name:"Ceiling Mount",                         cat:"Mount"   },
   { sku:"FCM-MOUNTPOL-2",          name:"Pole Mount",                            cat:"Mount"   },
-  { sku:"SP-FRC400F-HDD1",         name:"4TB HDD with Tray (FRC-400F)",          cat:"Storage" },
-  { sku:"SP-FRC400F-HDD2",         name:"8TB HDD with Tray (FRC-400F)",          cat:"Storage" },
-  { sku:"FC1-10-FCCLD-518-02-DD",  name:"FortiCamera Cloud Subscription/cam/yr", cat:"License" },
+  { sku:"SP-FRC400F-HDD1",         name:"4TB HDD with Tray (FRC-400F/400H)",     cat:"Storage" },
+  { sku:"SP-FRC400F-HDD2",         name:"8TB HDD with Tray (FRC-400F/400H)",     cat:"Storage" },
+  { sku:"FC1-10-FCCLD-518-01-DD",  name:"FortiCamera Cloud Subscription/cam/yr", cat:"License" },
   { sku:"FRC-EXC-10",              name:"ONVIF Camera License ×10",              cat:"License" },
   { sku:"FRC-CLM-20",              name:"FortiRecorder Cloud Mode ×20 cams",     cat:"License" },
 ];
@@ -1721,8 +1722,8 @@ export default function App(){
   const cloudCamCount=allCams.filter(c=>{const d=CAMERA_DB.find(x=>x.model===c.model);return d&&d.cloudOnly;}).length;
   const onpremCamCount=allCams.length-cloudCamCount;
   // Cloud license SKU suffix: -12=1yr, -36=3yr, -60=5yr
-  const licSkuMap={1:"FC1-10-FCCLD-518-02-12",3:"FC1-10-FCCLD-518-02-36",5:"FC1-10-FCCLD-518-02-60"};
-  const licSku=licSkuMap[licenseYears]||"FC1-10-FCCLD-518-02-12";
+  const licSkuMap={1:"FC1-10-FCCLD-518-01-12",3:"FC1-10-FCCLD-518-01-36",5:"FC1-10-FCCLD-518-01-60"};
+  const licSku=licSkuMap[licenseYears]||"FC1-10-FCCLD-518-01-12";
   const licDesc=`FortiCamera Cloud + FortiCare (${licenseYears}yr/cam)`;
 
   // VM stackable license calculator — returns array of {sku,desc,qty} to reach camCount
