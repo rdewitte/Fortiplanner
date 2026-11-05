@@ -9,40 +9,40 @@ const FT = {
 };
 
 const CAMERA_DB = [
-  { model:"FCM-MC51-C",  sku:"FCM-MC51-C",  name:"FortiCamera MC51-C",  cloudOnly:true,  type:"Indoor Mini-Cube",        resolution:"5MP",     fov:103, irRange:8,  poeStd:"802.3af", poeBudget:13, color:"#0071C5", desc:"5MP mini-cube, 2.0mm, 512GB SD, Wi-Fi",
+  { model:"FCM-MC51-C",  sku:"FCM-MC51-C",  name:"FortiCamera MC51-C",  cloudOnly:true,  type:"Indoor Mini-Cube",        resolution:"5MP",     fov:103, irRange:8,  poeStd:"802.3af", poeBudget:13, color:"#0071C5", desc:"5MP mini-cube, 2.0mm, 512GB SD, Wi-Fi",          fcCare:null,
     faceQ:{day:{"2":100,"5":92,"8":75,"12":52,"20":25},night:{"2":82,"5":68,"8":48,"12":28,"20":10}}, lprQ:{day:{"5":90,"10":72,"15":48,"20":28,"30":10},night:{"5":75,"10":55,"15":32,"20":15,"30":5}} },
-  { model:"FCM-CD51-C",  sku:"FCM-CD51-C",  name:"FortiCamera CD51-C",  cloudOnly:true,  type:"Dome Indoor/Outdoor",     resolution:"5MP",     fov:103, irRange:20, poeStd:"802.3af", poeBudget:13, color:"#0071C5", desc:"5MP dome, 2.8mm fixed, IP67/IK10, 512GB SD",
+  { model:"FCM-CD51-C",  sku:"FCM-CD51-C",  name:"FortiCamera CD51-C",  cloudOnly:true,  type:"Dome Indoor/Outdoor",     resolution:"5MP",     fov:103, irRange:20, poeStd:"802.3af", poeBudget:13, color:"#0071C5", desc:"5MP dome, 2.8mm fixed, IP67/IK10, 512GB SD",    fcCare:null,
     faceQ:{day:{"2":100,"5":92,"8":75,"12":52,"20":25},night:{"2":82,"5":68,"8":48,"12":28,"20":10}}, lprQ:{day:{"5":90,"10":72,"15":48,"20":28,"30":10},night:{"5":75,"10":55,"15":32,"20":15,"30":5}} },
-  { model:"FCM-CD55-C",  sku:"FCM-CD55-C",  name:"FortiCamera CD55-C",  cloudOnly:true,  type:"Dome Indoor/Outdoor",     resolution:"5MP",     fov:100, irRange:20, poeStd:"802.3af", poeBudget:13, color:"#0071C5", desc:"5MP dome, 2.7-13mm varifocal, IP67/IK10, 512GB SD",
+  { model:"FCM-CD55-C",  sku:"FCM-CD55-C",  name:"FortiCamera CD55-C",  cloudOnly:true,  type:"Dome Indoor/Outdoor",     resolution:"5MP",     fov:100, irRange:20, poeStd:"802.3af", poeBudget:13, color:"#0071C5", desc:"5MP dome, 2.7-13mm varifocal, IP67/IK10, 512GB SD", fcCare:null,
     faceQ:{day:{"2":100,"5":95,"8":80,"12":60,"20":35},night:{"2":85,"5":72,"8":55,"12":35,"20":14}}, lprQ:{day:{"5":95,"10":78,"15":58,"20":38,"30":16},night:{"5":80,"10":62,"15":42,"20":22,"30":8}} },
-  { model:"FCM-FD52-CA", sku:"FCM-FD52-CA", name:"FortiCamera FD52-CA", cloudOnly:true,  type:"AI Dome Indoor/Outdoor",  resolution:"5MP",     fov:103, irRange:30, poeStd:"802.3af", poeBudget:13, color:FT.red, desc:"5MP AI dome, 2.8mm fixed, IP66, 256GB SD, vandal-proof",
+  { model:"FCM-FD52-CA", sku:"FCM-FD52-CA", name:"FortiCamera FD52-CA", cloudOnly:true,  type:"AI Dome Indoor/Outdoor",  resolution:"5MP",     fov:103, irRange:30, poeStd:"802.3af", poeBudget:13, color:FT.red, desc:"5MP AI dome, 2.8mm fixed, IP66, 256GB SD, vandal-proof", fcCare:null,
     faceQ:{day:{"2":100,"5":92,"8":75,"12":52,"20":25},night:{"2":82,"5":68,"8":48,"12":28,"20":10}}, lprQ:{day:{"5":90,"10":72,"15":48,"20":28,"30":10},night:{"5":75,"10":55,"15":32,"20":15,"30":5}} },
-  { model:"FCM-FD55-CA", sku:"FCM-FD55-CA", name:"FortiCamera FD55-CA", cloudOnly:true,  type:"AI Dome Indoor/Outdoor",  resolution:"5MP",     fov:105, irRange:50, poeStd:"802.3at", poeBudget:25, color:FT.red, desc:"5MP AI dome, varifocal, DI/DO, IP67/IK10, 512GB SD",
+  { model:"FCM-FD55-CA", sku:"FCM-FD55-CA", name:"FortiCamera FD55-CA", cloudOnly:true,  type:"AI Dome Indoor/Outdoor",  resolution:"5MP",     fov:105, irRange:50, poeStd:"802.3at", poeBudget:25, color:FT.red, desc:"5MP AI dome, varifocal, DI/DO, IP67/IK10, 512GB SD",   fcCare:null,
     faceQ:{day:{"2":100,"5":98,"10":88,"15":70,"20":50},night:{"2":90,"5":80,"10":65,"15":45,"20":25}}, lprQ:{day:{"5":98,"10":88,"20":72,"30":52,"40":28},night:{"5":85,"10":70,"20":52,"30":32,"40":14}} },
-  { model:"FCM-FB85-CA", sku:"FCM-FB85-CA", name:"FortiCamera FB85-CA", cloudOnly:true,  type:"AI Bullet Indoor/Outdoor", resolution:"8MP",    fov:84,  irRange:50, poeStd:"802.3at", poeBudget:25, color:FT.red, desc:"8MP AI bullet, varifocal, DI/DO, IP67/IK10, 1TB SD",
+  { model:"FCM-FB85-CA", sku:"FCM-FB85-CA", name:"FortiCamera FB85-CA", cloudOnly:true,  type:"AI Bullet Indoor/Outdoor", resolution:"8MP",    fov:84,  irRange:50, poeStd:"802.3at", poeBudget:25, color:FT.red, desc:"8MP AI bullet, varifocal, DI/DO, IP67/IK10, 1TB SD",  fcCare:null,
     faceQ:{day:{"2":100,"5":100,"10":95,"15":82,"20":65},night:{"2":92,"5":85,"10":72,"15":55,"20":35}}, lprQ:{day:{"5":100,"10":92,"20":80,"30":65,"50":38},night:{"5":90,"10":78,"20":62,"30":45,"50":20}} },
-  { model:"FCM-CD51",    sku:"FCM-CD51",    name:"FortiCamera CD51",    cloudOnly:false, type:"Dome Indoor/Outdoor",     resolution:"5MP",     fov:103, irRange:20, poeStd:"802.3af", poeBudget:13, color:FT.grayDark, desc:"5MP dome, 2.8mm fixed, IP67/IK10",
+  { model:"FCM-CD51",    sku:"FCM-CD51",    name:"FortiCamera CD51",    cloudOnly:false, type:"Dome Indoor/Outdoor",     resolution:"5MP",     fov:103, irRange:20, poeStd:"802.3af", poeBudget:13, color:FT.grayDark, desc:"5MP dome, 2.8mm fixed, IP67/IK10",          fcCare:"FCD51",
     faceQ:{day:{"2":100,"5":92,"8":75,"12":52,"20":25},night:{"2":82,"5":68,"8":48,"12":28,"20":10}}, lprQ:{day:{"5":90,"10":72,"15":48,"20":28,"30":10},night:{"5":75,"10":55,"15":32,"20":15,"30":5}} },
-  { model:"FCM-CD55",    sku:"FCM-CD55",    name:"FortiCamera CD55",    cloudOnly:false, type:"Dome Indoor/Outdoor",     resolution:"5MP",     fov:100, irRange:20, poeStd:"802.3af", poeBudget:13, color:FT.grayDark, desc:"5MP dome, 2.7-13mm varifocal, IP67/IK10",
+  { model:"FCM-CD55",    sku:"FCM-CD55",    name:"FortiCamera CD55",    cloudOnly:false, type:"Dome Indoor/Outdoor",     resolution:"5MP",     fov:100, irRange:20, poeStd:"802.3af", poeBudget:13, color:FT.grayDark, desc:"5MP dome, 2.7-13mm varifocal, IP67/IK10",   fcCare:"FCD55",
     faceQ:{day:{"2":100,"5":95,"8":80,"12":60,"20":35},night:{"2":85,"5":72,"8":55,"12":35,"20":14}}, lprQ:{day:{"5":95,"10":78,"15":58,"20":38,"30":16},night:{"5":80,"10":62,"15":42,"20":22,"30":8}} },
-  { model:"FCM-FD50",    sku:"FCM-FD50",    name:"FortiCamera FD50",    cloudOnly:false, type:"Dome",                    resolution:"5MP",     fov:102, irRange:30, poeStd:"802.3af", poeBudget:13, color:FT.grayDark, desc:"5MP dome, 2.8-12mm varifocal, IP66/IK10",
+  { model:"FCM-FD50",    sku:"FCM-FD50",    name:"FortiCamera FD50",    cloudOnly:false, type:"Dome",                    resolution:"5MP",     fov:102, irRange:30, poeStd:"802.3af", poeBudget:13, color:FT.grayDark, desc:"5MP dome, 2.8-12mm varifocal, IP66/IK10",   fcCare:"FCFD5",
     faceQ:{day:{"2":100,"5":94,"8":78,"12":56,"20":30},night:{"2":84,"5":72,"8":52,"12":32,"20":12}}, lprQ:{day:{"5":93,"10":76,"15":55,"20":35,"30":14},night:{"5":78,"10":60,"15":40,"20":20,"30":7}} },
-  { model:"FCM-FD51",    sku:"FCM-FD51",    name:"FortiCamera FD51",    cloudOnly:false, type:"Dome",                    resolution:"5MP",     fov:100, irRange:30, poeStd:"802.3af", poeBudget:13, color:FT.grayDark, desc:"5MP dome, 2.8mm fixed, IP66/IK10",
+  { model:"FCM-FD51",    sku:"FCM-FD51",    name:"FortiCamera FD51",    cloudOnly:false, type:"Dome",                    resolution:"5MP",     fov:100, irRange:30, poeStd:"802.3af", poeBudget:13, color:FT.grayDark, desc:"5MP dome, 2.8mm fixed, IP66/IK10",          fcCare:"CF51A",
     faceQ:{day:{"2":100,"5":92,"8":75,"12":52,"20":25},night:{"2":82,"5":68,"8":48,"12":28,"20":10}}, lprQ:{day:{"5":90,"10":72,"15":48,"20":28,"30":10},night:{"5":75,"10":55,"15":32,"20":15,"30":5}} },
-  { model:"FCM-FB50",    sku:"FCM-FB50",    name:"FortiCamera FB50",    cloudOnly:false, type:"Bullet Indoor/Outdoor",   resolution:"5MP",     fov:90,  irRange:30, poeStd:"802.3af", poeBudget:13, color:FT.grayDark, desc:"5MP bullet, 2.8-12mm varifocal, IP66/IK10",
+  { model:"FCM-FB50",    sku:"FCM-FB50",    name:"FortiCamera FB50",    cloudOnly:false, type:"Bullet Indoor/Outdoor",   resolution:"5MP",     fov:90,  irRange:30, poeStd:"802.3af", poeBudget:13, color:FT.grayDark, desc:"5MP bullet, 2.8-12mm varifocal, IP66/IK10",  fcCare:"FCFB5",
     faceQ:{day:{"2":100,"5":96,"10":82,"15":62,"20":42},night:{"2":88,"5":76,"10":60,"15":40,"20":20}}, lprQ:{day:{"5":96,"10":84,"20":68,"30":48,"40":22},night:{"5":82,"10":66,"20":48,"30":28,"40":10}} },
-  { model:"FCM-MC51",    sku:"FCM-MC51",    name:"FortiCamera MC51",    cloudOnly:false, type:"Indoor Mini-Cube",        resolution:"5MP",     fov:103, irRange:8,  poeStd:"802.3af", poeBudget:13, color:FT.grayDark, desc:"5MP mini-cube, 2.0mm fixed",
+  { model:"FCM-MC51",    sku:"FCM-MC51",    name:"FortiCamera MC51",    cloudOnly:false, type:"Indoor Mini-Cube",        resolution:"5MP",     fov:103, irRange:8,  poeStd:"802.3af", poeBudget:13, color:FT.grayDark, desc:"5MP mini-cube, 2.0mm fixed",                fcCare:"CM51A",
     faceQ:{day:{"2":100,"5":92,"8":75,"12":52,"20":25},night:{"2":82,"5":68,"8":48,"12":28,"20":10}}, lprQ:{day:{"5":90,"10":72,"15":48,"20":28,"30":10},night:{"5":75,"10":55,"15":32,"20":15,"30":5}} },
-  { model:"FCM-FE120B",  sku:"FCM-FE120B",  name:"FortiCamera FE120B",  cloudOnly:false, type:"Fisheye",                 resolution:"12MP/9MP",fov:360, irRange:20, poeStd:"802.3at", poeBudget:13, color:FT.grayDark, desc:"12MP fisheye, 1.22mm, IP66/IK10",
+  { model:"FCM-FE120B",  sku:"FCM-FE120B",  name:"FortiCamera FE120B",  cloudOnly:false, type:"Fisheye",                 resolution:"12MP/9MP",fov:360, irRange:20, poeStd:"802.3at", poeBudget:13, color:FT.grayDark, desc:"12MP fisheye, 1.22mm, IP66/IK10",           fcCare:"FE20B",
     faceQ:{day:{"2":95,"4":78,"6":58,"8":38,"10":20},night:{"2":75,"4":55,"6":35,"8":18,"10":8}}, lprQ:{day:{"2":85,"4":65,"6":45,"8":25,"10":10},night:{"2":65,"4":45,"6":25,"8":10,"10":3}} },
-  { model:"FCM-FE120B-CA", sku:"FCM-FE120B-CA", name:"FortiCamera FE120B-CA", cloudOnly:true, type:"AI Fisheye",             resolution:"12MP",    fov:360, irRange:20, poeStd:"802.3at", poeBudget:13, color:FT.red, desc:"12MP AI fisheye, 1.22mm, built-in analytics, IP66/IK10, 1TB SD",
+  { model:"FCM-FE120B-CA", sku:"FCM-FE120B-CA", name:"FortiCamera FE120B-CA", cloudOnly:true, type:"AI Fisheye",             resolution:"12MP",    fov:360, irRange:20, poeStd:"802.3at", poeBudget:13, color:FT.red, desc:"12MP AI fisheye, 1.22mm, built-in analytics, IP66/IK10, 1TB SD", fcCare:null,
     faceQ:{day:{"2":98,"4":85,"6":68,"8":48,"10":28},night:{"2":82,"4":65,"6":45,"8":25,"10":12}}, lprQ:{day:{"2":90,"4":72,"6":52,"8":32,"10":15},night:{"2":72,"4":52,"6":32,"8":15,"10":5}} },
 ];
 
 const RECORDER_DB = [
-  { sku:"FRC-400F",    name:"FortiRecorder 400F",    channels:64,   form:"1U Appliance",            hdd:"1×4TB (4×8TB max)", desc:"Up to 64 cameras, RAID 0/1/5/10, face recognition" },
-  { sku:"FRC-100G",    name:"FortiRecorder 100G",    channels:16,   form:"1U Desktop",              hdd:"1×2TB",             desc:"Up to 16 cameras, desktop form factor" },
-  { sku:"FRC-VM-BASE", name:"FortiRecorder VM Base", channels:1024, form:"VM (VMware/KVM/Hyper-V)", hdd:"Host storage",      desc:"Base 10 cams, stack FRC-VM-10/50/100 to 1024" },
+  { sku:"FRC-400F",    name:"FortiRecorder 400F",    channels:64,   form:"1U Appliance",            hdd:"1×4TB (4×8TB max)", desc:"Up to 64 cameras, RAID 0/1/5/10, face recognition", fcCare:"FK4HF" },
+  { sku:"FRC-100G",    name:"FortiRecorder 100G",    channels:16,   form:"1U Desktop",              hdd:"1×2TB",             desc:"Up to 16 cameras, desktop form factor",              fcCare:"FK10G" },
+  { sku:"FRC-VM-BASE", name:"FortiRecorder VM Base", channels:1024, form:"VM (VMware/KVM/Hyper-V)", hdd:"Host storage",      desc:"Base 10 cams, stack FRC-VM-10/50/100 to 1024",      fcCare:null    },
 ];
 
 const ACCESSORIES_DB = [
@@ -965,6 +965,7 @@ export default function App(){
   const [qCond,setQCond]=useState("day");
   const [bomAcc,setBomAcc]=useState({});
   const [licenseYears,setLicenseYears]=useState(1);
+  const [fortiCareYears,setFortiCareYears]=useState(1);
   const [selRec,setSelRec]=useState("");
   const [deployMode,setDeployMode]=useState("cloud"); // "cloud"|"onprem"|"hybrid"
   // Sizing tab state
@@ -1749,8 +1750,26 @@ export default function App(){
         if(r){
           lines.push({sku:r.sku,desc:r.name,qty:1,cat:"Recorder"});
           if(r.sku==="FRC-VM-BASE")vmStackLines(allCams.length).forEach(l=>lines.push(l));
+          // FortiCare for recorder (appliances only; VM uses a different tier model)
+          if(r.fcCare){
+            const fcTerm={1:"12",3:"36",5:"60"}[fortiCareYears]||"12";
+            lines.push({sku:`FC-10-${r.fcCare}-247-02-${fcTerm}`,desc:`${r.name} FortiCare Premium (${fortiCareYears}yr)`,qty:1,cat:"Support"});
+          }
         }
       }
+      // FortiCare per on-prem camera model
+      const camCareGroups={};
+      allCams.forEach(c=>{
+        const d=CAMERA_DB.find(x=>x.model===c.model);
+        if(d&&d.fcCare){
+          if(!camCareGroups[d.fcCare])camCareGroups[d.fcCare]={code:d.fcCare,name:d.name,count:0};
+          camCareGroups[d.fcCare].count++;
+        }
+      });
+      Object.values(camCareGroups).forEach(g=>{
+        const fcTerm={1:"12",3:"36",5:"60"}[fortiCareYears]||"12";
+        lines.push({sku:`FC-10-${g.code}-247-02-${fcTerm}`,desc:`${g.name} FortiCare Premium (${fortiCareYears}yr)`,qty:g.count,cat:"Support"});
+      });
     }
     else if(deployMode==="hybrid"){
       // Hybrid: FortiRecorder (on-prem) + cloud management of all cameras
@@ -1760,8 +1779,26 @@ export default function App(){
         if(r){
           lines.push({sku:r.sku,desc:r.name,qty:1,cat:"Recorder"});
           if(r.sku==="FRC-VM-BASE")vmStackLines(allCams.length).forEach(l=>lines.push(l));
+          // FortiCare for recorder (appliances only)
+          if(r.fcCare){
+            const fcTerm={1:"12",3:"36",5:"60"}[fortiCareYears]||"12";
+            lines.push({sku:`FC-10-${r.fcCare}-247-02-${fcTerm}`,desc:`${r.name} FortiCare Premium (${fortiCareYears}yr)`,qty:1,cat:"Support"});
+          }
         }
       }
+      // FortiCare per on-prem camera model
+      const camCareGroupsH={};
+      allCams.forEach(c=>{
+        const d=CAMERA_DB.find(x=>x.model===c.model);
+        if(d&&d.fcCare){
+          if(!camCareGroupsH[d.fcCare])camCareGroupsH[d.fcCare]={code:d.fcCare,name:d.name,count:0};
+          camCareGroupsH[d.fcCare].count++;
+        }
+      });
+      Object.values(camCareGroupsH).forEach(g=>{
+        const fcTerm={1:"12",3:"36",5:"60"}[fortiCareYears]||"12";
+        lines.push({sku:`FC-10-${g.code}-247-02-${fcTerm}`,desc:`${g.name} FortiCare Premium (${fortiCareYears}yr)`,qty:g.count,cat:"Support"});
+      });
       // 2. FRC-CLM-20: cloud management of FortiRecorder cameras (stackable 20-cam blocks, perpetual)
       const clmBlocks=Math.ceil(allCams.length/20);
       if(clmBlocks>0)lines.push({sku:"FRC-CLM-20",desc:"FortiRecorder Cloud Mode — 20 cameras (perpetual, stackable)",qty:clmBlocks,cat:"License"});
@@ -3001,6 +3038,23 @@ export default function App(){
         </div>}
         {deployMode==="onprem"&&<div style={{padding:"6px 0 10px",borderBottom:"1px solid "+FT.gray,marginBottom:8,fontSize:10,color:FT.textSub}}>
           ✅ No cloud licenses required for on-prem only deployment.
+        </div>}
+        {/* FortiCare contract term selector (on-prem and hybrid) */}
+        {(deployMode==="onprem"||deployMode==="hybrid")&&<div style={{padding:"6px 0 10px",borderBottom:"1px solid "+FT.gray,marginBottom:8}}>
+          <div style={{fontSize:10,fontWeight:700,color:FT.navy,marginBottom:4}}>🛡 FortiCare Premium Contracts</div>
+          <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",marginBottom:4}}>
+            <div style={{fontSize:10,color:FT.textSub}}>Covers recorder + all cameras</div>
+            <div style={{display:"flex",alignItems:"center",gap:4}}>
+              <span style={{fontSize:10,color:FT.textSub}}>Term:</span>
+              {[1,3,5].map(y=><button key={y} onClick={()=>setFortiCareYears(y)}
+                style={{padding:"2px 10px",fontSize:10,fontWeight:700,borderRadius:3,cursor:"pointer",
+                  border:"1px solid "+(fortiCareYears===y?FT.red:FT.gray),
+                  background:fortiCareYears===y?FT.red:FT.white,
+                  color:fortiCareYears===y?FT.white:FT.grayDark}}>
+                {y}yr</button>)}
+            </div>
+          </div>
+          <div style={{fontSize:9,color:FT.grayMid}}>FC-10-[model]-247-02-{fortiCareYears===1?"12":fortiCareYears===3?"36":"60"} per device</div>
         </div>}
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:4}}>
           {ACCESSORIES_DB.map(a=>(
