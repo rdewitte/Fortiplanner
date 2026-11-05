@@ -57,7 +57,6 @@ const ACCESSORIES_DB = [
   { sku:"SP-FRC400F-HDD2",         name:"8TB HDD with Tray (FRC-400F/400H)",     cat:"Storage" },
   { sku:"FC1-10-FCCLD-518-01-DD",  name:"FortiCamera Cloud Subscription/cam/yr", cat:"License" },
   { sku:"FRC-EXC-10",              name:"ONVIF Camera License ×10",              cat:"License" },
-  { sku:"FRC-CLM-20",              name:"FortiRecorder Cloud Mode ×20 cams",     cat:"License" },
 ];
 
 
@@ -1806,10 +1805,7 @@ export default function App(){
           lines.push({sku:`FC-10-${g.code}-247-02-${fcTerm}`,desc:`${g.name} FortiCare Premium (${fortiCareYears}yr)`,qty:g.count,cat:"Support"});
         });
       }
-      // 2. FRC-CLM-20: cloud management of FortiRecorder cameras (stackable 20-cam blocks, perpetual)
-      const clmBlocks=Math.ceil(allCams.length/20);
-      if(clmBlocks>0)lines.push({sku:"FRC-CLM-20",desc:"FortiRecorder Cloud Mode — 20 cameras (perpetual, stackable)",qty:clmBlocks,cat:"License"});
-      // 3. FortiCamera Cloud subscription for cloud analytics per camera
+      // 2. FortiCamera Cloud subscription for cloud analytics per camera
       if(allCams.length>0)lines.push({sku:licSku,desc:licDesc,qty:allCams.length,cat:"License"});
     }
 
@@ -2983,7 +2979,7 @@ export default function App(){
         </div>}
         {deployMode==="hybrid"&&<div style={{fontSize:10,color:FT.textSub,lineHeight:1.6,padding:"6px 8px",background:"#EAF7EE",borderRadius:4,borderLeft:"3px solid "+FT.green}}>
           <b style={{color:FT.green}}>Hybrid mode:</b> FortiRecorder stores footage on-prem. All cameras (FortiCamera, 3rd-party, legacy) are also managed and their analytics accessed via FortiCamera Cloud.<br/>
-          Requires: <b>FRC-CLM-20</b> (cloud management of FortiRecorder, 20-cam blocks) + <b>FC1-10-FCCLD</b> subscription per camera for cloud analytics.
+          Requires: <b>FC1-10-FCCLD</b> subscription per camera for cloud analytics.
         </div>}
       </div>
 
@@ -3036,12 +3032,6 @@ export default function App(){
             </div>
           </div>
           <div style={{fontSize:9,color:FT.grayMid}}>{licSku} × {deployMode==="hybrid"?allCams.length:cloudCamCount}</div>
-          {deployMode==="hybrid"&&allCams.length>0&&(()=>{
-            const blocks=Math.ceil(allCams.length/20);
-            return<div style={{marginTop:6,padding:"4px 6px",background:"#EAF7EE",borderRadius:3,borderLeft:"3px solid "+FT.green,fontSize:9,color:FT.navy}}>
-              <b>FRC-CLM-20</b> × {blocks} — FortiRecorder Cloud Mode, {blocks*20}-camera block{blocks>1?"s":""} (perpetual)
-            </div>;
-          })()}
         </div>}
         {deployMode==="onprem"&&<div style={{padding:"6px 0 10px",borderBottom:"1px solid "+FT.gray,marginBottom:8,fontSize:10,color:FT.textSub}}>
           ✅ No cloud licenses required for on-prem only deployment.
